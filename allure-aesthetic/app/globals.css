@@ -1,0 +1,139 @@
+@import url("https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;900&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+  Design system — Blue/White professional operations tool
+  Light theme only. No dark mode.
+  8px grid | 12px card radius | Tajawal Arabic
+*/
+
+@theme inline {
+  /* Core palette */
+  --color-background:           #F5F7FB;
+  --color-foreground:           #0F172A;
+  --color-card:                 #FFFFFF;
+  --color-card-foreground:      #0F172A;
+  --color-popover:              #FFFFFF;
+  --color-popover-foreground:   #0F172A;
+  --color-muted:                #F1F5F9;
+  --color-muted-foreground:     #64748B;
+  --color-border:               #E4E8F0;
+  --color-input:                #E4E8F0;
+  --color-ring:                 #2563EB;
+
+  /* Primary = blue */
+  --color-primary:              #2563EB;
+  --color-primary-foreground:   #FFFFFF;
+
+  /* Secondary = light surface */
+  --color-secondary:            #F1F5F9;
+  --color-secondary-foreground: #0F172A;
+
+  /* Accent = light blue */
+  --color-accent:               #EFF6FF;
+  --color-accent-foreground:    #2563EB;
+
+  /* Destructive = red */
+  --color-destructive:          #DC2626;
+  --color-destructive-foreground: #FFFFFF;
+
+  /* Status colors — each maps to exactly one meaning, never reused */
+  --color-status-confirmed:     #16A34A;
+  --color-status-confirmed-bg:  #DCFCE7;
+  --color-status-open:          #D97706;
+  --color-status-open-bg:       #FEF3C7;
+  --color-status-request:       #2563EB;
+  --color-status-request-bg:    #DBEAFE;
+  --color-status-notice:        #6B7280;
+  --color-status-notice-bg:     #F3F4F6;
+  --color-status-breach:        #DC2626;
+  --color-status-breach-bg:     #FEE2E2;
+
+  /* Sidebar */
+  --color-sidebar:              #FFFFFF;
+  --color-sidebar-foreground:   #0F172A;
+  --color-sidebar-border:       #E4E8F0;
+
+  /* Font */
+  --font-sans: "Tajawal", sans-serif;
+
+  /* Radius — 12px base */
+  --radius:    0.75rem;
+  --radius-md: 0.625rem;
+  --radius-sm: 0.5rem;
+  --radius-lg: 1rem;
+}
+
+@layer base {
+  :root {
+    /* Raw CSS vars for inline var() use */
+    --background:           #F5F7FB;
+    --foreground:           #0F172A;
+    --card:                 #FFFFFF;
+    --card-foreground:      #0F172A;
+    --popover:              #FFFFFF;
+    --popover-foreground:   #0F172A;
+    --primary:              #2563EB;
+    --primary-hover:        #1D4ED8;
+    --primary-foreground:   #FFFFFF;
+    --primary-light:        #EFF6FF;
+    --secondary:            #F1F5F9;
+    --secondary-foreground: #0F172A;
+    --muted:                #F1F5F9;
+    --muted-foreground:     #64748B;
+    --accent:               #EFF6FF;
+    --accent-foreground:    #2563EB;
+    --destructive:          #DC2626;
+    --destructive-foreground: #FFFFFF;
+    --border:               #E4E8F0;
+    --input:                #E4E8F0;
+    --ring:                 #2563EB;
+    --radius:               0.75rem;
+
+    /* Status */
+    --status-confirmed:     #16A34A;
+    --status-confirmed-bg:  #DCFCE7;
+    --status-open:          #D97706;
+    --status-open-bg:       #FEF3C7;
+    --status-request:       #2563EB;
+    --status-request-bg:    #DBEAFE;
+    --status-notice:        #6B7280;
+    --status-notice-bg:     #F3F4F6;
+    --status-breach:        #DC2626;
+    --status-breach-bg:     #FEE2E2;
+  }
+
+  * {
+    border-color: var(--border);
+    outline-color: color-mix(in srgb, var(--ring) 50%, transparent);
+  }
+
+  html {
+    direction: rtl;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+  }
+}
+
+/* SLA breach pulse animation */
+@keyframes sla-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+.animate-sla-pulse {
+  animation: sla-pulse 1.4s ease-in-out infinite;
+}
+
+/* Tabular numerals for times and counts */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
