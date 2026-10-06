@@ -609,6 +609,25 @@ export interface Database {
         Args: { p_ticket_id: string; p_reason: string }
         Returns: Database["public"]["Tables"]["tickets"]["Row"]
       }
+      branch_respond: {
+        Args: {
+          p_ticket_id: string
+          p_response: BranchResponse
+          p_responder_name?: string | null
+          p_note?: string | null
+          p_counter_date?: string | null
+          p_counter_start_time?: string | null
+          p_counter_doctor_id?: string | null
+        }
+        Returns: Database["public"]["Tables"]["tickets"]["Row"]
+      }
+      acknowledge_notice: {
+        Args: {
+          p_ticket_id: string
+          p_responder_name?: string | null
+        }
+        Returns: Database["public"]["Tables"]["tickets"]["Row"]
+      }
     }
     Enums: {
       app_role: AppRole

@@ -1,13 +1,14 @@
 import { Search } from "lucide-react"
 import { CairoClock } from "./cairo-clock"
 import { NotificationBell } from "./notification-bell"
+import type { AppRole } from "@/lib/types/database.types"
 
-export function TopBar({ userId }: { userId: string }) {
+export function TopBar({ userId, role }: { userId: string; role: AppRole }) {
   return (
     <header className="h-13 shrink-0 flex items-center gap-3 px-5 bg-card border-b border-border">
       {/* Clock — on the end (left in RTL since flex row reverses) */}
       <div className="flex items-center gap-3 ms-auto">
-        <NotificationBell userId={userId} />
+        <NotificationBell userId={userId} role={role} />
 
         <div className="w-px h-5 bg-border" />
 
