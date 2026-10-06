@@ -127,9 +127,15 @@ const RPC_ERRORS: Record<string, string> = {
   ticket_not_found: "التيكت مش موجود.",
   ticket_not_answered: "التيكت لسه الفرع مردش عليه.",
   already_answered: "التيكت اترد عليه خلاص.",
+  already_handled: "التيكت اتعالج خلاص.",
   ticket_already_final: "التيكت اتقفل خلاص.",
   reason_required: "لازم تكتب سبب.",
   invalid_outcome: "نتيجة غير صحيحة.",
+  not_a_request: "التيكت ده مش طلب حجز.",
+  not_a_notice: "التيكت ده مش إشعار.",
+  counter_offer_needs_date_and_time: "الميعاد البديل لازم يكون فيه تاريخ ووقت.",
+  counter_doctor_not_in_branch: "الدكتورة دي مش في الفرع.",
+  status_change_only_today_or_tomorrow: "تغيير الحالة بس للنهاردة أو بكرة.",
 }
 
 export function mapRpcError(message: string | undefined | null): string {

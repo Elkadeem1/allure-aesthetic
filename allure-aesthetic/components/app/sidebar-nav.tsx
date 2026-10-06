@@ -10,6 +10,7 @@ import {
   LogOut,
   Building2,
   Ticket,
+  AlertTriangle,
 } from "lucide-react"
 import { cn } from "cn"
 import { signOut } from "@/app/login/actions"
@@ -28,11 +29,19 @@ const AGENT_NAV: NavItem[] = [
   { href: "/dashboard/tickets", label: "تيكتاتي",  icon: Ticket },
 ]
 
+const SUPERVISOR_NAV: NavItem[] = [
+  { href: "/dashboard",         label: "الفروع",     icon: Building2 },
+  { href: "/dashboard/book",    label: "حجز جديد",   icon: BookOpen },
+  { href: "/dashboard/tickets", label: "تيكتاتي",    icon: Ticket },
+  { href: "/dashboard/sla",     label: "متابعة SLA", icon: AlertTriangle },
+]
+
 const ADMIN_NAV: NavItem[] = [
   { href: "/admin",     label: "إدارة",      icon: LayoutDashboard },
   { href: "/dashboard", label: "الفروع",     icon: Building2 },
   { href: "/dashboard/book",    label: "حجز جديد", icon: BookOpen },
   { href: "/dashboard/tickets", label: "التيكتات", icon: Ticket },
+  { href: "/dashboard/sla",     label: "متابعة SLA", icon: AlertTriangle },
   { href: "/admin/users",    label: "المستخدمين", icon: Users,    soon: true },
   { href: "/admin/settings", label: "الإعدادات", icon: Settings, soon: true },
 ]
@@ -43,6 +52,7 @@ const BRANCH_NAV: NavItem[] = [
 
 function navForRole(role: AppRole): NavItem[] {
   if (role === "admin") return ADMIN_NAV
+  if (role === "supervisor") return SUPERVISOR_NAV
   if (role === "branch") return BRANCH_NAV
   return AGENT_NAV
 }

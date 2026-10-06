@@ -21,7 +21,7 @@ export function AppShell({ role, userId, fullName, subLabel, children }: AppShel
       <SidebarNav role={role} fullName={fullName} subLabel={subLabel} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <TopBar userId={userId} />
+        <TopBar userId={userId} role={role} />
         <main className="flex-1 overflow-y-auto p-6">
           {children}
         </main>
