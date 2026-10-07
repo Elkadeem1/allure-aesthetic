@@ -26,8 +26,3 @@ export function formatTime(t: string): string {
   const h12 = h % 12 || 12
   return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`
 }
-
-/** Format a date as day/month with Latin digits, e.g. "5/10". */
-export function formatDayMonth(d: Date): string {
-  return `${d.getDate()}/${d.getMonth() + 1}`
-}

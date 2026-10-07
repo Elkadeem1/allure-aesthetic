@@ -40,6 +40,7 @@ export type WizardBranch = {
 
 export type BookingData = {
   todayStr: string
+  slaMinutes: number // app_settings.sla_minutes — the branch reply window for REQUESTs
   laserConfig: LaserConfig
   branches: WizardBranch[]
 }
@@ -70,6 +71,7 @@ export async function loadBookingData(): Promise<BookingData> {
     combosRes,
     priceMapRes,
     priceItemsRes,
+    settingsRes,
   ] = await Promise.all([
     supabase
       .from("branches")
@@ -115,6 +117,7 @@ export async function loadBookingData(): Promise<BookingData> {
       .order("sort"),
     supabase.from("laser_price_map").select("price_list_id, area_codes, single_item_id, package3_item_id"),
     supabase.from("price_items").select("id, name, price"),
+    supabase.from("app_settings").select("sla_minutes").maybeSingle(),
   ])
 
   const branches = branchesRes.data ?? []
@@ -251,5 +254,8 @@ export async function loadBookingData(): Promise<BookingData> {
     }
   })
 
-  return { todayStr, laserConfig, branches: wizardBranches }
+  // 5 mirrors the column default in app_settings; only used if the row is missing.
+  const slaMinutes = settingsRes.data?.sla_minutes ?? 5
+
+  return { todayStr, slaMinutes, laserConfig, branches: wizardBranches }
 }

@@ -12,6 +12,26 @@ import type {
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
+function mapAuthAdminError(err: { code?: string; message?: string }): string {
+  switch (err.code) {
+    case "email_exists":
+    case "user_already_exists":
+      return "الإيميل ده مستخدم قبل كده."
+    case "email_address_invalid":
+      return "الإيميل مش صحيح."
+    case "weak_password":
+      return "كلمة المرور ضعيفة — جرب واحدة أقوى."
+    case "same_password":
+      return "كلمة المرور الجديدة زي القديمة."
+    case "user_not_found":
+      return "المستخدم مش موجود."
+  }
+  if (err.message && /already (been )?registered/i.test(err.message)) {
+    return "الإيميل ده مستخدم قبل كده."
+  }
+  return "حصل خطأ، حاول تاني."
+}
+
 async function requireAdmin() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -58,7 +78,7 @@ export async function createUserAction(args: {
     password: args.password,
     email_confirm: true,
   })
-  if (createError) return { ok: false, error: createError.message }
+  if (createError) return { ok: false, error: mapAuthAdminError(createError) }
 
   const { error: profileError } = await admin.from("profiles").insert({
     id: newUser.user.id,
@@ -120,7 +140,7 @@ export async function resetPasswordAction(args: {
   const { error } = await admin.auth.admin.updateUserById(args.userId, {
     password: args.newPassword,
   })
-  if (error) return { ok: false, error: error.message }
+  if (error) return { ok: false, error: mapAuthAdminError(error) }
   return { ok: true }
 }
 
@@ -368,25 +388,17 @@ export async function saveDoctorScheduleAction(args: {
     if (e.startTime >= e.endTime) return { ok: false, error: "وقت البداية لازم يكون قبل وقت النهاية." }
   }
 
-  const { error: delError } = await supabase
-    .from("doctor_schedules")
-    .delete()
-    .eq("doctor_id", args.doctorId)
-  if (delError) return { ok: false, error: mapRpcError(delError.message) }
+  const { error } = await supabase.rpc("replace_doctor_schedule", {
+    p_doctor_id: args.doctorId,
+    p_entries: args.entries.map((e) => ({
+      weekday: e.weekday,
+      start_time: e.startTime,
+      end_time: e.endTime,
+      kind: e.kind,
+    })),
+  })
 
-  if (args.entries.length > 0) {
-    const { error: insError } = await supabase
-      .from("doctor_schedules")
-      .insert(args.entries.map((e) => ({
-        doctor_id: args.doctorId,
-        weekday: e.weekday,
-        start_time: e.startTime,
-        end_time: e.endTime,
-        kind: e.kind,
-      })))
-    if (insError) return { ok: false, error: mapRpcError(insError.message) }
-  }
-
+  if (error) return { ok: false, error: mapRpcError(error.message) }
   return { ok: true }
 }
 

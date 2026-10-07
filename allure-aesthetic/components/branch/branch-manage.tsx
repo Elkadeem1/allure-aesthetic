@@ -246,11 +246,24 @@ export function BranchManage({
 
   // Realtime subscriptions
   useEffect(() => {
+    const branchFilter = `branch_id=eq.${branchId}`
+    // Realtime cannot filter DELETE events, so deletes stay unfiltered.
+    // doctor_schedules has no branch_id column, so it cannot be filtered either.
     const channel = supabase
-      .channel("branch-manage")
+      .channel(`branch-manage:${branchId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "doctor_updates" },
+        { event: "INSERT", schema: "public", table: "doctor_updates", filter: branchFilter },
+        () => refetch(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "doctor_updates", filter: branchFilter },
+        () => refetch(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "doctor_updates" },
         () => refetch(),
       )
       .on(
@@ -262,7 +275,7 @@ export function BranchManage({
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [supabase, refetch])
+  }, [supabase, refetch, branchId])
 
   // Branch-wide active updates
   const branchWideUpdates = updates.filter(

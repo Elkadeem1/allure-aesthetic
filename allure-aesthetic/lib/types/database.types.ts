@@ -699,6 +699,18 @@ export interface Database {
         }
         Returns: Database["public"]["Tables"]["tickets"]["Row"]
       }
+      replace_doctor_schedule: {
+        Args: {
+          p_doctor_id: string
+          p_entries: Array<{
+            weekday: number
+            start_time: string
+            end_time: string
+            kind: ShiftKind
+          }>
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: AppRole

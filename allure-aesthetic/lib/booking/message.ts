@@ -2,6 +2,7 @@
 // message (MVP style), decision-card presentation, and RPC error -> Arabic.
 
 import { DAY_LABELS, tLabel, weekdaySat0 } from "@/lib/engine"
+import { formatNumber } from "@/lib/format"
 import type { Gender, LaserConfig, TicketKind } from "@/lib/engine"
 
 // Egyptian mobile: 010 / 011 / 012 / 015 + 8 digits.
@@ -60,12 +61,12 @@ export type DecisionCardCopy = {
   canSend: boolean
 }
 
-export function decisionCardCopy(kind: TicketKind | null): DecisionCardCopy {
+export function decisionCardCopy(kind: TicketKind | null, slaMinutes: number): DecisionCardCopy {
   if (kind === "request") {
     return {
       tone: "request",
       title: "طلب حجز — محتاج رد الفرع",
-      instruction: "ابعت طلب للفرع واستنى الرد خلال ٥ دقايق.",
+      instruction: `ابعت طلب للفرع واستنى الرد خلال ${formatNumber(slaMinutes)} دقايق.`,
       dentolizeLabel: "Open",
       canSend: true,
     }

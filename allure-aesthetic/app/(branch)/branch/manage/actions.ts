@@ -78,12 +78,19 @@ export async function deleteDoctorUpdateAction(
   updateId: string,
 ): Promise<ActionResult> {
   const supabase = await createClient()
-  const { error } = await supabase
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: "مش مسجل دخول." }
+
+  // RLS filters out rows the caller may not delete; zero rows means not allowed.
+  const { data, error } = await supabase
     .from("doctor_updates")
     .delete()
     .eq("id", updateId)
+    .select("id")
 
   if (error) return { ok: false, error: mapRpcError(error.message) }
+  if (!data || data.length === 0) return { ok: false, error: mapRpcError("not_allowed") }
   return { ok: true }
 }
 
@@ -131,27 +138,16 @@ export async function saveScheduleAction(args: {
 
   const supabase = await createClient()
 
-  const { error: deleteError } = await supabase
-    .from("doctor_schedules")
-    .delete()
-    .eq("doctor_id", args.doctorId)
+  const { error } = await supabase.rpc("replace_doctor_schedule", {
+    p_doctor_id: args.doctorId,
+    p_entries: args.entries.map((e) => ({
+      weekday: e.weekday,
+      start_time: e.startTime,
+      end_time: e.endTime,
+      kind: e.kind,
+    })),
+  })
 
-  if (deleteError) return { ok: false, error: mapRpcError(deleteError.message) }
-
-  if (args.entries.length > 0) {
-    const { error: insertError } = await supabase
-      .from("doctor_schedules")
-      .insert(
-        args.entries.map((e) => ({
-          doctor_id: args.doctorId,
-          weekday: e.weekday,
-          start_time: e.startTime,
-          end_time: e.endTime,
-          kind: e.kind,
-        })),
-      )
-    if (insertError) return { ok: false, error: mapRpcError(insertError.message) }
-  }
-
+  if (error) return { ok: false, error: mapRpcError(error.message) }
   return { ok: true }
 }

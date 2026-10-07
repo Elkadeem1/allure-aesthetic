@@ -6,6 +6,7 @@ import { format } from "date-fns"
 import { MapPin, CreditCard, ListOrdered, AlertTriangle, ChevronDown, ChevronUp, BookOpen } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { cairoToday } from "@/lib/time"
+import { addDays } from "@/lib/engine/time"
 import { DoctorScheduleTable } from "./doctor-schedule"
 import { PriceCatalogue } from "./price-catalogue"
 import { SidePanel } from "./side-panel"
@@ -40,12 +41,6 @@ const UPDATE_BANNER_STYLE: Record<string, { bg: string; text: string; border: st
   hours:     { bg: "bg-[var(--status-request-bg)]",   text: "text-[var(--status-request)]",  border: "border-[var(--status-request)]" },
   open_slot: { bg: "bg-[var(--status-confirmed-bg)]", text: "text-[var(--status-confirmed)]", border: "border-[var(--status-confirmed)]" },
   note:      { bg: "bg-[var(--status-notice-bg)]",    text: "text-[var(--status-notice)]",   border: "border-[var(--status-notice)]" },
-}
-
-function addDays(dateStr: string, n: number) {
-  const d = new Date(dateStr + "T00:00:00")
-  d.setDate(d.getDate() + n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
 function getActiveBannerUpdates(updates: DoctorUpdate[], todayStr: string) {
