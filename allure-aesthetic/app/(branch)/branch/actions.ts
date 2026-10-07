@@ -2,9 +2,21 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { mapRpcError } from "@/lib/booking/message"
+import { cairoToday } from "@/lib/time"
 import type { BranchResponse } from "@/lib/types/database.types"
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
+
+function isValidDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  const [y, m, d] = s.split("-").map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+}
+
+function isValidTime(s: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(s)
+}
 
 export async function branchRespondAction(args: {
   ticketId: string
@@ -20,6 +32,12 @@ export async function branchRespondAction(args: {
   if (args.response === "counter_offer") {
     if (!args.counterDate || !args.counterStartTime) {
       return { ok: false, error: "الميعاد البديل لازم يكون فيه تاريخ ووقت." }
+    }
+    if (!isValidDate(args.counterDate) || !isValidTime(args.counterStartTime)) {
+      return { ok: false, error: "التاريخ أو الوقت مش صحيح." }
+    }
+    if (args.counterDate < cairoToday()) {
+      return { ok: false, error: "الميعاد البديل لازم يكون النهاردة أو بعد كده." }
     }
   }
   if (args.response === "unavailable" && !args.note?.trim()) {

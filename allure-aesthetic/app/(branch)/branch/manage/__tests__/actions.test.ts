@@ -4,12 +4,14 @@ import { describe, expect, it, vi, beforeEach } from "vitest"
 const mockInsert = vi.fn()
 const mockDelete = vi.fn()
 const mockFrom = vi.fn()
+const mockRpc = vi.fn()
 const mockAuthGetUser = vi.fn()
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     auth: { getUser: mockAuthGetUser },
     from: mockFrom,
+    rpc: mockRpc,
   })),
 }))
 
@@ -26,6 +28,7 @@ import {
 beforeEach(() => {
   vi.clearAllMocks()
   mockAuthGetUser.mockResolvedValue({ data: { user: { id: "user-1" } } })
+  mockRpc.mockResolvedValue({ error: null })
   mockFrom.mockReturnValue({
     insert: mockInsert.mockReturnValue({ error: null }),
     delete: mockDelete.mockReturnValue({
@@ -203,14 +206,6 @@ describe("saveScheduleAction — validation", () => {
   })
 
   it("accepts adjacent shifts on same weekday", async () => {
-    const deleteEq = vi.fn().mockReturnValue({ error: null })
-    mockFrom.mockReturnValueOnce({
-      delete: vi.fn().mockReturnValue({ eq: deleteEq }),
-    })
-    mockFrom.mockReturnValueOnce({
-      insert: mockInsert.mockReturnValue({ error: null }),
-    })
-
     const res = await saveScheduleAction({
       doctorId: "doc-1",
       entries: [
@@ -222,14 +217,6 @@ describe("saveScheduleAction — validation", () => {
   })
 
   it("validates Saturday=0 through Friday=6 range", async () => {
-    const deleteEq = vi.fn().mockReturnValue({ error: null })
-    mockFrom.mockReturnValueOnce({
-      delete: vi.fn().mockReturnValue({ eq: deleteEq }),
-    })
-    mockFrom.mockReturnValueOnce({
-      insert: mockInsert.mockReturnValue({ error: null }),
-    })
-
     const res = await saveScheduleAction({
       doctorId: "doc-1",
       entries: [
@@ -241,36 +228,73 @@ describe("saveScheduleAction — validation", () => {
   })
 
   it("saves empty schedule (clears all shifts)", async () => {
-    const deleteEq = vi.fn().mockReturnValue({ error: null })
-    mockFrom.mockReturnValueOnce({
-      delete: vi.fn().mockReturnValue({ eq: deleteEq }),
-    })
-
     const res = await saveScheduleAction({
       doctorId: "doc-1",
       entries: [],
     })
     expect(res).toEqual({ ok: true })
-    // insert should not be called for empty entries
-    expect(mockInsert).not.toHaveBeenCalled()
+    expect(mockRpc).toHaveBeenCalledWith("replace_doctor_schedule", {
+      p_doctor_id: "doc-1",
+      p_entries: [],
+    })
+  })
+
+  it("saves delete + insert atomically through one RPC call", async () => {
+    const res = await saveScheduleAction({
+      doctorId: "doc-1",
+      entries: [entry(0, "10:00", "14:00"), entry(2, "15:00", "20:00")],
+    })
+    expect(res).toEqual({ ok: true })
+    expect(mockRpc).toHaveBeenCalledTimes(1)
+    expect(mockRpc).toHaveBeenCalledWith("replace_doctor_schedule", {
+      p_doctor_id: "doc-1",
+      p_entries: [
+        { weekday: 0, start_time: "10:00", end_time: "14:00", kind: "all" },
+        { weekday: 2, start_time: "15:00", end_time: "20:00", kind: "all" },
+      ],
+    })
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it("returns the RPC error (schedule left untouched by rollback)", async () => {
+    mockRpc.mockResolvedValue({ error: { message: "not_allowed" } })
+    const res = await saveScheduleAction({
+      doctorId: "doc-other-branch",
+      entries: [entry(0, "10:00", "14:00")],
+    })
+    expect(res).toEqual({ ok: false, error: "not_allowed" })
   })
 })
 
 describe("deleteDoctorUpdateAction", () => {
-  it("returns ok on success", async () => {
-    const eq = vi.fn().mockReturnValue({ error: null })
+  const mockDeleteResult = (result: { data: unknown; error: unknown }) => {
+    const select = vi.fn().mockResolvedValue(result)
     mockFrom.mockReturnValue({
-      delete: vi.fn().mockReturnValue({ eq }),
+      delete: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnValue({ select }) }),
     })
+  }
+
+  it("returns ok on success", async () => {
+    mockDeleteResult({ data: [{ id: "upd-1" }], error: null })
     const res = await deleteDoctorUpdateAction("upd-1")
     expect(res).toEqual({ ok: true })
   })
 
+  it("rejects if not authenticated", async () => {
+    mockAuthGetUser.mockResolvedValue({ data: { user: null } })
+    const res = await deleteDoctorUpdateAction("upd-1")
+    expect(res).toEqual({ ok: false, error: "مش مسجل دخول." })
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it("reports not allowed when RLS filters the row out (0 rows deleted)", async () => {
+    mockDeleteResult({ data: [], error: null })
+    const res = await deleteDoctorUpdateAction("upd-other-branch")
+    expect(res).toEqual({ ok: false, error: "not_allowed" })
+  })
+
   it("returns error on failure", async () => {
-    const eq = vi.fn().mockReturnValue({ error: { message: "RLS violation" } })
-    mockFrom.mockReturnValue({
-      delete: vi.fn().mockReturnValue({ eq }),
-    })
+    mockDeleteResult({ data: null, error: { message: "RLS violation" } })
     const res = await deleteDoctorUpdateAction("upd-1")
     expect(res).toEqual({ ok: false, error: "RLS violation" })
   })

@@ -281,7 +281,7 @@ export function BookingWizard({
 
   const laserDur = isLaser ? laserMinutes(areas, cfg) : null
 
-  const copy = decision ? decisionCardCopy(decision.kind) : null
+  const copy = decision ? decisionCardCopy(decision.kind, data.slaMinutes) : null
   const phoneValid = isEgyptMobile(phone)
   const complete = startMin != null && date != null
   const canSend =

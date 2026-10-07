@@ -26,11 +26,13 @@ export default async function BranchPage() {
       supabase
         .from("ticket_board")
         .select("*")
+        .eq("branch_id", branchId)
         .eq("status", "pending")
         .order("created_at", { ascending: true }),
       supabase
         .from("ticket_board")
         .select("*")
+        .eq("branch_id", branchId)
         .neq("status", "pending")
         .or(
           `and(created_at.gte.${startUtc},created_at.lt.${endUtc}),appt_date.eq.${dateStr}`,

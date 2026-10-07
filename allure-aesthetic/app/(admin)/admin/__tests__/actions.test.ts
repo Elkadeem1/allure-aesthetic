@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
 
 const mockFrom = vi.fn()
+const mockRpc = vi.fn()
 const mockAuthGetUser = vi.fn()
 const mockAdminCreateUser = vi.fn()
 const mockAdminDeleteUser = vi.fn()
@@ -10,6 +11,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => ({
     auth: { getUser: mockAuthGetUser },
     from: mockFrom,
+    rpc: mockRpc,
   })),
 }))
 
@@ -127,6 +129,15 @@ describe("createUserAction — validation", () => {
     const res = await createUserAction({ email: "x@y.com", password: "123456", fullName: "Test", role: "agent", branchId: "br-1" })
     expect(res).toEqual({ ok: false, error: "المستخدم مش فرع — مينفعش يكون مرتبط بفرع." })
   })
+
+  it("maps duplicate-email auth error to Arabic", async () => {
+    mockAdminCreateUser.mockResolvedValue({
+      data: { user: null },
+      error: { code: "email_exists", message: "A user with this email address has already been registered" },
+    })
+    const res = await createUserAction({ email: "x@y.com", password: "123456", fullName: "Test", role: "agent", branchId: null })
+    expect(res).toEqual({ ok: false, error: "الإيميل ده مستخدم قبل كده." })
+  })
 })
 
 describe("updateUserAction — validation", () => {
@@ -149,6 +160,12 @@ describe("resetPasswordAction — validation", () => {
   it("rejects short new password", async () => {
     const res = await resetPasswordAction({ userId: "u-1", newPassword: "12345" })
     expect(res).toEqual({ ok: false, error: "كلمة المرور لازم تكون 6 حروف على الأقل." })
+  })
+
+  it("never surfaces raw English auth errors", async () => {
+    mockAdminUpdateUserById.mockResolvedValue({ data: null, error: { message: "Database error updating user" } })
+    const res = await resetPasswordAction({ userId: "u-1", newPassword: "123456" })
+    expect(res).toEqual({ ok: false, error: "حصل خطأ، حاول تاني." })
   })
 })
 
@@ -179,8 +196,8 @@ describe("createServiceAction — validation", () => {
 
   it("rejects empty code", async () => {
     const res = await createServiceAction({
-      code: "", nameAr: "خدمة", nameEn: "Service", defaultDuration: 30,
-      usesLaser: false, kbSlug: null,
+      code: "", nameAr: "خدمة", nameEn: "Service", defaultDurationMin: 30,
+      usesLaserAreas: false, kbSlug: null,
     })
     expect(res).toEqual({ ok: false, error: "الكود والاسم مطلوبين." })
   })
@@ -227,7 +244,7 @@ describe("saveDoctorScheduleAction — validation", () => {
   it("rejects weekday out of 0-6 range", async () => {
     const res = await saveDoctorScheduleAction({
       doctorId: "d-1",
-      entries: [{ weekday: 7, startTime: "09:00", endTime: "17:00", shiftKind: "morning" }],
+      entries: [{ weekday: 7, startTime: "09:00", endTime: "17:00", kind: "all" }],
     })
     expect(res).toEqual({ ok: false, error: "يوم غير صحيح." })
   })
@@ -235,8 +252,21 @@ describe("saveDoctorScheduleAction — validation", () => {
   it("rejects start_time >= end_time", async () => {
     const res = await saveDoctorScheduleAction({
       doctorId: "d-1",
-      entries: [{ weekday: 0, startTime: "17:00", endTime: "09:00", shiftKind: "morning" }],
+      entries: [{ weekday: 0, startTime: "17:00", endTime: "09:00", kind: "all" }],
     })
     expect(res).toEqual({ ok: false, error: "وقت البداية لازم يكون قبل وقت النهاية." })
+  })
+
+  it("saves through the atomic replace_doctor_schedule RPC", async () => {
+    mockRpc.mockResolvedValue({ error: null })
+    const res = await saveDoctorScheduleAction({
+      doctorId: "d-1",
+      entries: [{ weekday: 0, startTime: "09:00", endTime: "17:00", kind: "all" }],
+    })
+    expect(res).toEqual({ ok: true })
+    expect(mockRpc).toHaveBeenCalledWith("replace_doctor_schedule", {
+      p_doctor_id: "d-1",
+      p_entries: [{ weekday: 0, start_time: "09:00", end_time: "17:00", kind: "all" }],
+    })
   })
 })

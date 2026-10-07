@@ -676,11 +676,13 @@ export function BranchQueue({
       supabase
         .from("ticket_board")
         .select("*")
+        .eq("branch_id", branchId)
         .eq("status", "pending")
         .order("created_at", { ascending: true }),
       supabase
         .from("ticket_board")
         .select("*")
+        .eq("branch_id", branchId)
         .neq("status", "pending")
         .or(
           `and(created_at.gte.${startUtc},created_at.lt.${endUtc}),appt_date.eq.${dateStr}`,
@@ -694,22 +696,22 @@ export function BranchQueue({
       setNotices(pending.filter((t) => t.kind === "notice"))
     }
     if (completed) setHistory(completed)
-  }, [supabase])
+  }, [supabase, branchId])
 
   // Realtime subscription
   useEffect(() => {
     const channel = supabase
-      .channel("branch-tickets")
+      .channel(`branch-tickets:${branchId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "tickets" },
+        { event: "*", schema: "public", table: "tickets", filter: `branch_id=eq.${branchId}` },
         () => refetch(),
       )
       .subscribe()
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [supabase, refetch])
+  }, [supabase, refetch, branchId])
 
   // Sound: play on new request arrival
   useEffect(() => {

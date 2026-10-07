@@ -1,7 +1,9 @@
 "use client"
 
 import { ChevronRight, ChevronLeft, RotateCcw, Info } from "lucide-react"
-import { formatTime, formatDayMonth } from "@/lib/format"
+import { formatTime } from "@/lib/format"
+import { cairoToday } from "@/lib/time"
+import { addDays, weekdaySat0 } from "@/lib/engine/time"
 import type { DoctorData, DoctorUpdate } from "./types"
 
 const DAY_LABELS = ["السبت", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"]
@@ -14,23 +16,17 @@ const UPDATE_CELL_STYLE: Record<string, { bg: string; text: string; label: strin
   note:       { bg: "bg-[var(--status-notice-bg)]",  text: "text-[var(--status-notice)]",  label: "ملاحظة" },
 }
 
-function getWeekDates(weekOffset: number): Date[] {
-  const now = new Date()
-  // shift to Cairo: approximate via UTC+2 offset for display
-  const cairoNow = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Cairo" }))
-  const dayOfWeek = (cairoNow.getDay() + 1) % 7  // sat=0
-  const saturday = new Date(cairoNow)
-  saturday.setDate(cairoNow.getDate() - dayOfWeek + weekOffset * 7)
-  saturday.setHours(0, 0, 0, 0)
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(saturday)
-    d.setDate(saturday.getDate() + i)
-    return d
-  })
+/** The Saturday→Friday Cairo dates ("YYYY-MM-DD") of the current week + offset. */
+function getWeekDates(weekOffset: number): string[] {
+  const today = cairoToday()
+  const saturday = addDays(today, -weekdaySat0(today) + weekOffset * 7)
+  return Array.from({ length: 7 }, (_, i) => addDays(saturday, i))
 }
 
-function dateToStr(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+/** "YYYY-MM-DD" -> "D/M" (Latin digits, no leading zeros). */
+function dayMonthLabel(dateStr: string) {
+  const [, m, d] = dateStr.split("-").map(Number)
+  return `${d}/${m}`
 }
 
 function getActiveUpdate(doctorId: string, dateStr: string, updates: DoctorUpdate[]) {
@@ -110,8 +106,7 @@ export function DoctorScheduleTable({
               <th className="text-end px-3 py-2.5 font-semibold text-muted-foreground bg-muted/40 w-28 sticky end-0 z-10">
                 الطبيب
               </th>
-              {weekDates.map((d, i) => {
-                const dateStr = dateToStr(d)
+              {weekDates.map((dateStr, i) => {
                 const isToday = dateStr === todayStr
                 return (
                   <th
@@ -124,7 +119,7 @@ export function DoctorScheduleTable({
                   >
                     <div>{DAY_LABELS[i]}</div>
                     <div className={`text-[10px] mt-0.5 tabular font-normal ${isToday ? "text-primary/80" : "text-muted-foreground/70"}`}>
-                      {formatDayMonth(d)}
+                      {dayMonthLabel(dateStr)}
                     </div>
                   </th>
                 )
@@ -145,8 +140,7 @@ export function DoctorScheduleTable({
                   </td>
 
                   {/* Day cells */}
-                  {weekDates.map((d, dayIdx) => {
-                    const dateStr = dateToStr(d)
+                  {weekDates.map((dateStr, dayIdx) => {
                     const isToday = dateStr === todayStr
                     const weekday = dayIdx  // 0=Sat already
                     const daySchedules = doctor.schedules.filter((s) => s.weekday === weekday)
