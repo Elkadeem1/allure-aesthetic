@@ -11,6 +11,9 @@ import {
   Building2,
   Ticket,
   AlertTriangle,
+  Stethoscope,
+  Wrench,
+  CreditCard,
 } from "lucide-react"
 import { cn } from "cn"
 import { signOut } from "@/app/login/actions"
@@ -37,13 +40,17 @@ const SUPERVISOR_NAV: NavItem[] = [
 ]
 
 const ADMIN_NAV: NavItem[] = [
-  { href: "/admin",     label: "إدارة",      icon: LayoutDashboard },
-  { href: "/dashboard", label: "الفروع",     icon: Building2 },
-  { href: "/dashboard/book",    label: "حجز جديد", icon: BookOpen },
-  { href: "/dashboard/tickets", label: "التيكتات", icon: Ticket },
-  { href: "/dashboard/sla",     label: "متابعة SLA", icon: AlertTriangle },
-  { href: "/admin/users",    label: "المستخدمين", icon: Users,    soon: true },
-  { href: "/admin/settings", label: "الإعدادات", icon: Settings, soon: true },
+  { href: "/admin",             label: "إدارة",        icon: LayoutDashboard },
+  { href: "/dashboard",         label: "الفروع",       icon: Building2 },
+  { href: "/dashboard/book",    label: "حجز جديد",     icon: BookOpen },
+  { href: "/dashboard/tickets", label: "التيكتات",     icon: Ticket },
+  { href: "/dashboard/sla",     label: "متابعة SLA",   icon: AlertTriangle },
+  { href: "/admin/users",       label: "المستخدمين",   icon: Users },
+  { href: "/admin/branches",    label: "الفروع",       icon: Building2 },
+  { href: "/admin/doctors",     label: "الأطباء",      icon: Stethoscope },
+  { href: "/admin/services",    label: "الخدمات",      icon: Wrench },
+  { href: "/admin/pricing",     label: "الأسعار",      icon: CreditCard },
+  { href: "/admin/settings",    label: "الإعدادات",    icon: Settings },
 ]
 
 const BRANCH_NAV: NavItem[] = [

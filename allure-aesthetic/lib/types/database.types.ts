@@ -30,6 +30,21 @@ type Rel = {
 export interface Database {
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          id: boolean
+          sla_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          sla_minutes?: number
+        }
+        Update: {
+          sla_minutes?: number
+        }
+        Relationships: Rel[]
+      }
       branches: {
         Row: {
           id: string
@@ -438,8 +453,16 @@ export interface Database {
           shift_starts_before: string
           cutoff: string
         }
-        Insert: Record<string, never>
-        Update: Record<string, never>
+        Insert: {
+          branch_id: string
+          weekday: number
+          shift_starts_before: string
+          cutoff: string
+        }
+        Update: {
+          shift_starts_before?: string
+          cutoff?: string
+        }
         Relationships: Rel[]
       }
       doctor_laser_cutoffs: {
@@ -448,8 +471,14 @@ export interface Database {
           weekday: number
           cutoff: string
         }
-        Insert: Record<string, never>
-        Update: Record<string, never>
+        Insert: {
+          doctor_id: string
+          weekday: number
+          cutoff: string
+        }
+        Update: {
+          cutoff?: string
+        }
         Relationships: Rel[]
       }
       laser_areas: {
@@ -464,8 +493,26 @@ export interface Database {
           requires_companion: boolean
           sort: number
         }
-        Insert: Record<string, never>
-        Update: Record<string, never>
+        Insert: {
+          code: string
+          gender: ClientGender
+          name_en: string
+          hint_ar?: string | null
+          duration_min: number
+          is_small?: boolean
+          is_full_body?: boolean
+          requires_companion?: boolean
+          sort?: number
+        }
+        Update: {
+          name_en?: string
+          hint_ar?: string | null
+          duration_min?: number
+          is_small?: boolean
+          is_full_body?: boolean
+          requires_companion?: boolean
+          sort?: number
+        }
         Relationships: Rel[]
       }
       laser_area_conflicts: {
@@ -473,7 +520,10 @@ export interface Database {
           area_code: string
           conflicts_with: string
         }
-        Insert: Record<string, never>
+        Insert: {
+          area_code: string
+          conflicts_with: string
+        }
         Update: Record<string, never>
         Relationships: Rel[]
       }
@@ -486,8 +536,20 @@ export interface Database {
           duration_adjust_min: number
           sort: number
         }
-        Insert: Record<string, never>
-        Update: Record<string, never>
+        Insert: {
+          label: string
+          required_codes: string[]
+          any_of_codes?: string[]
+          duration_adjust_min?: number
+          sort?: number
+        }
+        Update: {
+          label?: string
+          required_codes?: string[]
+          any_of_codes?: string[]
+          duration_adjust_min?: number
+          sort?: number
+        }
         Relationships: Rel[]
       }
       laser_price_map: {
@@ -498,8 +560,17 @@ export interface Database {
           single_item_id: string
           package3_item_id: string | null
         }
-        Insert: Record<string, never>
-        Update: Record<string, never>
+        Insert: {
+          price_list_id: string
+          area_codes: string[]
+          single_item_id: string
+          package3_item_id?: string | null
+        }
+        Update: {
+          area_codes?: string[]
+          single_item_id?: string
+          package3_item_id?: string | null
+        }
         Relationships: Rel[]
       }
       kb_articles: {
