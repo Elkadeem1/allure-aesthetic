@@ -47,7 +47,8 @@ const ADMIN_NAV: NavItem[] = [
 ]
 
 const BRANCH_NAV: NavItem[] = [
-  { href: "/branch",   label: "تيكتاتنا", icon: Ticket },
+  { href: "/branch",        label: "تيكتاتنا", icon: Ticket },
+  { href: "/branch/manage", label: "إدارة الفرع", icon: Settings },
 ]
 
 function navForRole(role: AppRole): NavItem[] {
@@ -97,8 +98,8 @@ export function SidebarNav({ role, fullName, subLabel }: SidebarNavProps) {
         {nav.map((item) => {
           // Exact match for the dashboard root so it doesn't stay lit on /dashboard/book etc.
           const active =
-            item.href === "/dashboard"
-              ? pathname === "/dashboard"
+            item.href === "/dashboard" || item.href === "/branch"
+              ? pathname === item.href
               : pathname === item.href || pathname.startsWith(item.href + "/")
           return (
             <Link
