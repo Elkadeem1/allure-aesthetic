@@ -59,13 +59,18 @@ export default async function BranchManagePage() {
       .order("start_time"),
     supabase
       .from("branch_services")
-      .select("services(id, code, name_ar)")
+      .select("service_id")
       .eq("branch_id", branchId),
   ])
 
-  const branchServices = (services ?? [])
-    .map((s) => (s as { services: { id: string; code: string; name_ar: string } }).services)
-    .filter(Boolean)
+  const serviceIds = (services ?? []).map((s) => s.service_id)
+  const { data: serviceRows } = serviceIds.length > 0
+    ? await supabase
+        .from("services")
+        .select("id, code, name_ar")
+        .in("id", serviceIds)
+    : { data: [] as { id: string; code: string; name_ar: string }[] }
+  const branchServices = serviceRows ?? []
 
   return (
     <BranchManage
