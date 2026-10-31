@@ -1,15 +1,8 @@
 // Real seed-derived fixtures (supabase/seed.sql). Used by the engine tests so
 // the cases mirror actual clinic data rather than invented numbers.
 
-import type {
-  BranchLaserCutoff,
-  BranchPolicy,
-  Doctor,
-  DoctorContext,
-  LaserConfig,
-  Service,
-} from "../types"
-import type { LaserPriceEntry } from "../pricing"
+import type { Doctor, DoctorContext, LaserConfig, Service } from "../types"
+import type { LaserAreaPrice, LaserPriceEntry, PriceBook, PriceCategory, PricedItem } from "../pricing"
 
 // --- weekday reference (Sat=0): concrete 2026 dates for deterministic tests ---
 export const SAT = "2026-10-10" // Saturday  (sat0 = 0)
@@ -68,7 +61,7 @@ export const LASER_CONFIG: LaserConfig = {
   ],
 }
 
-// --- laser_price_map (standard list, resolved item prices) ---
+// --- laser_price_map (standard list, resolved item prices) — for laserPrice() ---
 export const STANDARD_PRICES: LaserPriceEntry[] = [
   { areaCodes: ["w_underarm", "w_bikini"], label: "البكيني والأندر أرم (Bikini & Underarms)", single: 400, package3: 1100 },
   { areaCodes: ["w_face", "w_neck"], label: "الوجه والرقبة (Face & Neck)", single: 300, package3: 800 },
@@ -76,59 +69,134 @@ export const STANDARD_PRICES: LaserPriceEntry[] = [
   { areaCodes: ["w_halfarms"], label: "نص الدراع (Half Arms)", single: 500, package3: 1300 },
 ]
 
-// --- branch_policies ---
-export const TANTA1_POLICY: BranchPolicy = {
-  requestWindowDays: 1,
-  sameDayAlwaysRequest: false,
-  autoConfirmWeekdays: [0], // Saturday
-  allowOverlap: true,
-}
-export const TANTA2_POLICY: BranchPolicy = {
-  requestWindowDays: 1,
-  sameDayAlwaysRequest: true,
-  autoConfirmWeekdays: [],
-  allowOverlap: true,
+// ---------------------------------------------------------------------
+// Per-branch PriceBook fixtures (migration-6 model).
+// ---------------------------------------------------------------------
+const CATS: PriceCategory[] = [
+  { code: "CON", nameAr: "كشف الجلدية والشعر", nameEn: "Consultation", startsFrom: null },
+  { code: "DPN", nameAr: "الديرمابن", nameEn: "Dermapen", startsFrom: 750 },
+  { code: "LSR", nameAr: "ليزر إزالة الشعر", nameEn: "Laser", startsFrom: null },
+  { code: "FIL", nameAr: "فيلر الوش", nameEn: "Face Fillers", startsFrom: null },
+]
+
+const item = (
+  code: string,
+  categoryCode: string,
+  price: number | null,
+  extra: Partial<PricedItem> = {}
+): PricedItem => ({
+  code,
+  categoryCode,
+  itemType: "service",
+  fullName: code,
+  groupName: null,
+  variant: null,
+  unit: null,
+  price,
+  priceText: null,
+  doctorIds: null,
+  ...extra,
+})
+
+export const LASER_MAP: LaserAreaPrice[] = [
+  { areaCodes: ["w_face"], gender: "female", singleItemCode: "LSR-01", package3ItemCode: "LSR-02" },
+  { areaCodes: ["w_face", "w_neck"], gender: "female", singleItemCode: "LSR-03", package3ItemCode: "LSR-04" },
+  { areaCodes: ["w_bikini", "w_underarm"], gender: "female", singleItemCode: "LSR-05", package3ItemCode: "LSR-06" },
+  { areaCodes: ["w_halfarms"], gender: "female", singleItemCode: "LSR-07", package3ItemCode: "LSR-08" },
+  { areaCodes: ["m_upper"], gender: "male", singleItemCode: "LSR-37", package3ItemCode: null },
+  { areaCodes: ["m_chest", "m_back"], gender: "male", singleItemCode: "LSR-36", package3ItemCode: null },
+]
+
+// A standard (non-Innova) branch that carries the common items.
+export const STANDARD_BOOK: PriceBook = {
+  categories: CATS,
+  laserMap: LASER_MAP,
+  items: [
+    item("CON-01", "CON", 200, { fullName: "كشف بشرة أو شعر - أول مرة" }),
+    item("CON-02", "CON", 150, { fullName: "كشف بشرة أو شعر - متابعة" }),
+    item("CON-03", "CON", 300, { fullName: "كشف بشرة وشعر - أول مرة" }),
+    item("CON-04", "CON", 250, { fullName: "كشف بشرة وشعر - متابعة" }),
+    item("LSR-21", "LSR", 1, { unit: "نبضة", variant: "سعر النبضة", fullName: "ليزر سيدات - سعر النبضة" }),
+    item("LSR-40", "LSR", 2, { unit: "نبضة", variant: "سعر النبضة", fullName: "ليزر رجال - سعر النبضة" }),
+    item("LSR-01", "LSR", 250, { fullName: "الوجه (Face)" }),
+    item("LSR-02", "LSR", 650),
+    item("LSR-03", "LSR", 300, { fullName: "الوجه والرقبة (Face & Neck)" }),
+    item("LSR-04", "LSR", 800),
+    item("LSR-05", "LSR", 400, { fullName: "البكيني والأندر أرم (Bikini & Underarms)" }),
+    item("LSR-06", "LSR", 1100),
+    item("LSR-07", "LSR", 500, { fullName: "نص الدراع (Half Arms)" }),
+    item("LSR-08", "LSR", 1300),
+    item("LSR-37", "LSR", 120, { fullName: "النص العلوي (Half Upper)" }),
+    item("DPN-01", "DPN", 900, { fullName: "ديرمابن - جلسة" }),
+    item("FIL-01", "FIL", 1200, { fullName: "فيلر - سرنجة" }),
+    item("FIL-02", "FIL", 50, { itemType: "addon", fullName: "فيلر - إضافة" }),
+    item("FIL-03", "FIL", 0, { fullName: "فيلر - عرض" }),
+  ],
 }
 
-const TANTA2_LASER_CUTOFFS: BranchLaserCutoff[] = [
-  { weekday: 2, shiftStartsBefore: "16:00", cutoff: "14:00" }, // Mon
-  { weekday: 3, shiftStartsBefore: "16:00", cutoff: "14:00" }, // Tue
-  { weekday: 5, shiftStartsBefore: "16:00", cutoff: "14:00" }, // Thu
-]
+// Kafr El-Sheikh: CON-05..08 exist, restricted to the two linked doctors.
+export const KAFR_BOOK: PriceBook = {
+  categories: CATS,
+  laserMap: LASER_MAP,
+  items: [
+    item("CON-01", "CON", 200, { fullName: "كشف بشرة أو شعر - أول مرة" }),
+    item("CON-02", "CON", 150, { fullName: "كشف بشرة أو شعر - متابعة" }),
+    item("CON-05", "CON", 300, { fullName: "كشف — كفر الشيخ مع د. خلود/شيماء - أول مرة", doctorIds: ["kholoud", "shimaa"] }),
+    item("CON-06", "CON", 200, { fullName: "كشف — كفر الشيخ مع د. خلود/شيماء - متابعة", doctorIds: ["kholoud", "shimaa"] }),
+  ],
+}
+
+// Innova: the "Re Cons" item has a textual price, no numeric one.
+export const INNOVA_BOOK: PriceBook = {
+  categories: CATS,
+  laserMap: LASER_MAP,
+  items: [
+    item("CON-01", "CON", 200, { fullName: "كشف Innova - أول مرة" }),
+    item("INV-029", "CON", null, { fullName: "كشف Innova - إعادة كشف", priceText: "مجاني خلال شهر" }),
+    item("LSR-21", "LSR", 2, { unit: "نبضة", variant: "سعر النبضة", fullName: "ليزر سيدات - سعر النبضة" }),
+  ],
+}
 
 // --- doctors ---
 export const HEBA: Doctor = {
-  id: "heba", branchId: "tanta1", displayName: "Dr Heba Ghonim",
-  defaultBookingStatus: "open", acceptsMen: false, laserMenAllowed: true,
+  id: "heba", branchId: "tanta1", code: "hebaghonim", displayName: "Dr Heba Ghonim",
+  defaultBookingStatus: "open", alwaysOpen: true, acceptsMen: false, laserMenAllowed: true,
   menLaserAreaCodes: null, rejectsSmallAreasOnly: true, noOverlap: false,
-  notes: "مش بتشتغل لرجالة.",
+  specialty: null, notes: "مش بتشتغل لرجالة.", personKey: "hebaghonim",
 }
 export const OLA: Doctor = {
-  id: "ola", branchId: "shebin", displayName: "Dr Ola Gadallah",
-  defaultBookingStatus: "confirmed", acceptsMen: true, laserMenAllowed: true,
+  id: "ola", branchId: "shebin", code: "olagadallah", displayName: "Dr Ola Gadallah",
+  defaultBookingStatus: "confirmed", alwaysOpen: false, acceptsMen: true, laserMenAllowed: true,
   menLaserAreaCodes: ["m_beard", "m_underarm"], rejectsSmallAreasOnly: false, noOverlap: true,
-  notes: "مع الرجالة: تحديد دقن وأندر أرم بس.",
+  specialty: null, notes: "مع الرجالة: تحديد دقن وأندر أرم بس.", personKey: "olagadallah",
 }
 export const MAHITAB: Doctor = {
-  id: "mahitab", branchId: "shebin", displayName: "Dr Mahitab Sabry",
-  defaultBookingStatus: "confirmed", acceptsMen: true, laserMenAllowed: true,
+  id: "mahitab", branchId: "shebin", code: "mahitabsabry", displayName: "Dr Mahitab Sabry",
+  defaultBookingStatus: "confirmed", alwaysOpen: false, acceptsMen: true, laserMenAllowed: true,
   menLaserAreaCodes: null, rejectsSmallAreasOnly: false, noOverlap: false,
-  notes: null,
+  specialty: null, notes: null, personKey: "mahitabsabry",
 }
 export const NOURHAN: Doctor = {
-  id: "nourhan", branchId: "tanta2", displayName: "Dr Nourhan Hashem",
-  defaultBookingStatus: "confirmed", acceptsMen: true, laserMenAllowed: true,
+  id: "nourhan", branchId: "tanta2", code: "nourhanhashem", displayName: "Dr Nourhan Hashem",
+  defaultBookingStatus: "confirmed", alwaysOpen: false, acceptsMen: true, laserMenAllowed: true,
   menLaserAreaCodes: null, rejectsSmallAreasOnly: false, noOverlap: false,
-  notes: null,
+  specialty: null, notes: null, personKey: "nourhanhashem",
 }
 export const KHOLOUD: Doctor = {
-  id: "kholoud", branchId: "kafrelsheikh", displayName: "Dr Kholoud Fayrouz",
-  defaultBookingStatus: "confirmed", acceptsMen: true, laserMenAllowed: false,
+  id: "kholoud", branchId: "kafrelsheikh", code: "kholoudfayrouz", displayName: "Dr Kholoud Fayrouz",
+  defaultBookingStatus: "confirmed", alwaysOpen: false, acceptsMen: true, laserMenAllowed: false,
   menLaserAreaCodes: null, rejectsSmallAreasOnly: false, noOverlap: false,
-  notes: "ممنوع حجز ليزر رجالة معاها.",
+  specialty: null, notes: "ممنوع حجز ليزر رجالة معاها.", personKey: "kholoudfayrouz",
+}
+// Innova doctor: always Open.
+export const EMAN: Doctor = {
+  id: "eman", branchId: "innova", code: "emankarawya", displayName: "Dr Eman Karawya",
+  defaultBookingStatus: "open", alwaysOpen: true, acceptsMen: false, laserMenAllowed: true,
+  menLaserAreaCodes: null, rejectsSmallAreasOnly: false, noOverlap: false,
+  specialty: null, notes: null, personKey: "emankarawya",
 }
 
-// --- contexts (schedules + cut-offs + updates slot for the test to fill) ---
+// --- contexts (schedules + cut-offs + rooms + updates slot for the test to fill) ---
 export const hebaCtx = (updates: DoctorContext["updates"] = []): DoctorContext => ({
   doctor: HEBA,
   schedules: [
@@ -140,18 +208,20 @@ export const hebaCtx = (updates: DoctorContext["updates"] = []): DoctorContext =
   ],
   laserCutoffs: [],
   branchLaserCutoffs: [],
+  rooms: [],
   updates,
 })
 
-export const olaCtx = (): DoctorContext => ({
+export const olaCtx = (updates: DoctorContext["updates"] = []): DoctorContext => ({
   doctor: OLA,
   schedules: [{ weekday: 4, startTime: "11:00", endTime: "16:00", kind: "all" }],
   laserCutoffs: [{ weekday: 4, cutoff: "17:00" }],
   branchLaserCutoffs: [],
-  updates: [],
+  rooms: [],
+  updates,
 })
 
-export const mahitabCtx = (): DoctorContext => ({
+export const mahitabCtx = (updates: DoctorContext["updates"] = []): DoctorContext => ({
   doctor: MAHITAB,
   schedules: [
     { weekday: 0, startTime: "10:00", endTime: "18:00", kind: "laser" },
@@ -160,10 +230,17 @@ export const mahitabCtx = (): DoctorContext => ({
   ],
   laserCutoffs: [{ weekday: 0, cutoff: "18:00" }],
   branchLaserCutoffs: [],
-  updates: [],
+  rooms: [],
+  updates,
 })
 
-export const nourhanCtx = (): DoctorContext => ({
+const TANTA2_LASER_CUTOFFS: DoctorContext["branchLaserCutoffs"] = [
+  { weekday: 2, shiftStartsBefore: "16:00", cutoff: "14:00" }, // Mon
+  { weekday: 3, shiftStartsBefore: "16:00", cutoff: "14:00" }, // Tue
+  { weekday: 5, shiftStartsBefore: "16:00", cutoff: "14:00" }, // Thu
+]
+
+export const nourhanCtx = (updates: DoctorContext["updates"] = []): DoctorContext => ({
   doctor: NOURHAN,
   schedules: [
     { weekday: 0, startTime: "10:00", endTime: "16:00", kind: "derma" },
@@ -174,10 +251,11 @@ export const nourhanCtx = (): DoctorContext => ({
   ],
   laserCutoffs: [],
   branchLaserCutoffs: TANTA2_LASER_CUTOFFS,
-  updates: [],
+  rooms: [],
+  updates,
 })
 
-export const kholoudCtx = (): DoctorContext => ({
+export const kholoudCtx = (updates: DoctorContext["updates"] = []): DoctorContext => ({
   doctor: KHOLOUD,
   schedules: [
     { weekday: 0, startTime: "10:00", endTime: "14:00", kind: "laser" },
@@ -188,5 +266,6 @@ export const kholoudCtx = (): DoctorContext => ({
   ],
   laserCutoffs: [],
   branchLaserCutoffs: [],
-  updates: [],
+  rooms: [],
+  updates,
 })

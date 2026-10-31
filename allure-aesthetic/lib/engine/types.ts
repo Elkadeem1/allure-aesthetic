@@ -11,29 +11,42 @@
 
 export type Gender = "female" | "male"
 export type ShiftKind = "all" | "laser" | "other" | "derma"
+
+// doctors.default_booking_status (DB enum, lowercase).
 export type BookingStatus = "open" | "confirmed"
+// The status an agent sets in Dentolize — what decide() surfaces (HTML labels).
+export type DentolizeStatus = "Open" | "Confirmed"
+// tickets.kind (DB enum) — still used by the ticket UI / server action.
 export type TicketKind = "request" | "notice"
 
+// doctor_updates.type (DB enum, migration 6 adds laser_stop/booking_cutoff/full)
 export type UpdateType =
-  | "off"        // غايبة / branch closed-or-event when branch-wide
-  | "stop"       // وقف حجز / branch fully-booked when branch-wide
-  | "hours"      // ساعات مختلفة — replaces the fixed schedule for those days
-  | "open_slot"  // الدور فاضي — book Confirmed instead of Open
-  | "force_open" // book Open instead of Confirmed
-  | "note"       // informational banner only
+  | "off"            // غايبة / branch closed-or-event when branch-wide
+  | "stop"           // وقف حجز / branch fully-booked when branch-wide
+  | "hours"          // ساعات مختلفة — replaces the fixed schedule for those days
+  | "open_slot"      // الدور فاضي — book Confirmed instead of Open
+  | "force_open"     // book Open instead of Confirmed
+  | "note"           // informational banner only
+  | "laser_stop"     // وقف الليزر من ساعة — no laser after at_time
+  | "booking_cutoff" // وقف الحجز بعد ساعة — no booking after at_time
+  | "full"           // الحجز اكتمل — fully booked (doctor/day or whole branch/day)
 
 // doctors (a row = a doctor AT one branch)
 export type Doctor = {
   id: string
   branchId: string
+  code: string // slug, e.g. "hebaghonim" — stable per branch; matches HTML slug(name)
   displayName: string
   defaultBookingStatus: BookingStatus
+  alwaysOpen: boolean // HTML RULES status:"Open" — always booked Open
   acceptsMen: boolean
   laserMenAllowed: boolean
   menLaserAreaCodes: string[] | null // null = all men areas allowed
   rejectsSmallAreasOnly: boolean
   noOverlap: boolean
+  specialty: string | null
   notes: string | null
+  personKey: string | null // same human across branches shares this
 }
 
 // doctor_schedules — one row per shift segment
@@ -58,15 +71,17 @@ export type BranchLaserCutoff = {
   cutoff: string
 }
 
-// branch_policies — drives the ticket-kind decision
-export type BranchPolicy = {
-  requestWindowDays: number
-  sameDayAlwaysRequest: boolean
-  autoConfirmWeekdays: number[]
-  allowOverlap: boolean
+// rooms + doctor_rooms — the room a doctor sits in on a given weekday (Innova)
+export type DoctorRoom = {
+  weekday: number
+  title: string
 }
 
 // doctor_updates — temporary changes. doctorId null = branch-wide.
+//   atTime    used by laser_stop / booking_cutoff ("from this time")
+//   weekdays  recurring updates (HTML isRecurring / dows); Sat=0..Fri=6.
+//             When non-empty the row is recurring: it applies on those
+//             weekdays within [dateFrom, dateTo]. Empty = a plain date range.
 export type UpdateSegment = { start: string; end: string; kind?: ShiftKind }
 export type DoctorUpdate = {
   id: string
@@ -74,6 +89,8 @@ export type DoctorUpdate = {
   type: UpdateType
   dateFrom: string
   dateTo: string
+  atTime: string | null
+  weekdays: number[]
   segments: UpdateSegment[]
   note: string | null
   createdAt: string // ISO timestamp — used to break override ties (latest wins)
@@ -120,5 +137,6 @@ export type DoctorContext = {
   schedules: DoctorSchedule[]
   laserCutoffs: DoctorLaserCutoff[]
   branchLaserCutoffs: BranchLaserCutoff[]
+  rooms: DoctorRoom[]
   updates: DoctorUpdate[]
 }

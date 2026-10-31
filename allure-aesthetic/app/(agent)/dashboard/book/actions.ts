@@ -1,13 +1,18 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { loadBookingData } from "@/lib/booking/data"
+import { loadBookingData, type BookingData } from "@/lib/booking/data"
 import { isEgyptMobile, mapRpcError } from "@/lib/booking/message"
+
+/** Lazy-load the wizard's data when the booking drawer opens. */
+export async function getBookingData(): Promise<BookingData> {
+  return loadBookingData()
+}
 import {
   companionMissing,
+  decide,
   evalDoctor,
   hhmm,
-  resolveTicketKind,
   sessionMinutes,
   startSlots,
 } from "@/lib/engine"
@@ -53,6 +58,7 @@ export async function sendTicket(input: SendTicketInput): Promise<SendTicketResu
     schedules: wd.schedules,
     laserCutoffs: wd.laserCutoffs,
     branchLaserCutoffs: branch.branchLaserCutoffs,
+    rooms: wd.rooms,
     updates: branch.updates,
   }
   const evalArgs = {
@@ -80,14 +86,16 @@ export async function sendTicket(input: SendTicketInput): Promise<SendTicketResu
     return { ok: false, error: "الوقت المختار مابقاش متاح — اختار وقت تاني." }
   }
 
-  const decision = resolveTicketKind(
-    wd.doctor,
-    input.date,
-    data.todayStr,
-    branch.updates,
-    branch.policy
-  )
-  if (decision.kind === null) {
+  const decision = decide({
+    branchCode: branch.code,
+    hasTickets: branch.hasTickets,
+    doctor: wd.doctor,
+    serviceCode: service.code,
+    date: input.date,
+    today: data.todayStr,
+    updates: branch.updates,
+  })
+  if (decision.ticket !== "innova_ticket") {
     return { ok: false, error: mapRpcError("no_ticket_needed") }
   }
 
@@ -102,7 +110,7 @@ export async function sendTicket(input: SendTicketInput): Promise<SendTicketResu
     p_appt_date: input.date,
     p_start_time: hhmm(input.startMin),
     p_end_time: hhmm(input.startMin + durationMin),
-    p_agent_note: input.note?.trim() || null,
+    p_agent_note: input.note?.trim() || undefined,
   })
 
   if (error || !ticket) return { ok: false, error: mapRpcError(error?.message) }

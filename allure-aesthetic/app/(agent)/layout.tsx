@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { AppShell } from "@/components/app/app-shell"
-import { BookingShortcut } from "@/components/app/booking-shortcut"
 
 export default async function AgentLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -24,8 +23,13 @@ export default async function AgentLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <AppShell role={profile.role} userId={user.id} fullName={profile.full_name}>
-      <BookingShortcut />
+    <AppShell
+      role={profile.role}
+      userId={user.id}
+      fullName={profile.full_name}
+      logoSrc="/brand/allure-logo.svg"
+      logoWordmark="Allure"
+    >
       {children}
     </AppShell>
   )

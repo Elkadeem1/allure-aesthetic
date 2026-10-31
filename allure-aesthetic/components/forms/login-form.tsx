@@ -5,6 +5,7 @@ import { signIn, type LoginState } from "@/app/login/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { BrandLogo } from "@/components/app/brand-logo"
 import { AlertCircle } from "lucide-react"
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -24,12 +25,15 @@ export function LoginForm() {
       <div className="w-full max-w-sm">
 
         {/* Logo block */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary text-primary-foreground font-black text-lg mb-3 select-none">
-            A
-          </div>
-          <h1 className="text-xl font-bold text-foreground">Allure</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">مساعد الحجز للمراكز</p>
+        <div className="flex flex-col items-center text-center mb-8">
+          <BrandLogo
+            src="/brand/allure-logo.svg"
+            alt="Allure Aesthetics"
+            wordmark="Allure"
+            imgClassName="h-12 w-auto object-contain"
+            wordmarkClassName="text-2xl"
+          />
+          <p className="text-sm text-muted-foreground mt-3">مساعد الحجز لمراكز Allure</p>
         </div>
 
         {/* Form card */}

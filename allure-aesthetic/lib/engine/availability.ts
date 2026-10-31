@@ -1,10 +1,15 @@
 // =====================================================================
 // Doctor availability.
 //   * windowsFor — valid start-time windows on a date, respecting branch/
-//     doctor "off/stop" blocks, "hours" overrides, laser compatibility of
-//     each shift segment, and laser cut-offs (doctor + branch).
+//     doctor "off/stop/full" blocks, "hours" overrides, laser compatibility
+//     of each shift segment, and laser/booking cut-offs (doctor cutoff,
+//     branch cutoff, laser_stop + booking_cutoff updates).
 //   * evalDoctor — can this doctor take this service/gender/areas on this
 //     date at all? Returns ok + clear Arabic reasons + notes.
+//
+// Ported from docs/mvp/agent-hub-2026-10.html (windowsFor / verdictFor /
+// evalDoctor). Recurring updates (weekdays) and the new update types
+// laser_stop / booking_cutoff / full are migration-6 additions.
 // =====================================================================
 
 import type { DoctorContext, DoctorUpdate, LaserConfig, Service, ShiftKind, Gender } from "./types"
@@ -17,24 +22,38 @@ export type WindowsResult = {
   weekday: number
   blocked: DoctorUpdate | null // off/stop that applies (doctor or branch-wide)
   branchWideBlock: boolean // true when `blocked` is a branch-wide row
+  full: DoctorUpdate | null // الحجز اكتمل (doctor/day or whole-branch/day)
+  fullBranchWide: boolean // true when `full` is a whole-branch row
   hoursUpdate: DoctorUpdate | null
+  roomTitle: string | null // the doctor's room on this weekday, if assigned
   segments: Segment[] // the raw day segments (schedule or hours override)
   windows: Window[] // compatible, cut-off-clamped, merged
   cutoffApplied: boolean
 }
 
+/** Does an update apply on `date`? Recurring rows (weekdays set) match on
+ *  those weekdays within [dateFrom, dateTo]; plain rows match the range. */
+export function updateApplies(u: DoctorUpdate, date: string): boolean {
+  if (u.dateFrom > date || date > u.dateTo) return false
+  if (u.weekdays.length > 0) return u.weekdays.includes(weekdaySat0(date))
+  return true
+}
+
 function activeUpdates(ctx: DoctorContext, date: string): DoctorUpdate[] {
   return ctx.updates.filter(
-    (u) =>
-      (u.doctorId === ctx.doctor.id || u.doctorId === null) &&
-      u.dateFrom <= date &&
-      date <= u.dateTo
+    (u) => (u.doctorId === ctx.doctor.id || u.doctorId === null) && updateApplies(u, date)
   )
 }
 
 /** Is a shift segment of this kind usable for the chosen service? */
 function compatible(service: Service, kind: ShiftKind): boolean {
   return service.usesLaserAreas ? kind === "all" || kind === "laser" : kind !== "laser"
+}
+
+/** The room the doctor sits in on `date`'s weekday, or null. */
+export function roomFor(ctx: DoctorContext, date: string): string | null {
+  const weekday = weekdaySat0(date)
+  return ctx.rooms.find((r) => r.weekday === weekday)?.title ?? null
 }
 
 export function windowsFor(
@@ -50,10 +69,19 @@ export function windowsFor(
     weekday,
     blocked: null,
     branchWideBlock: false,
+    full: null,
+    fullBranchWide: false,
     hoursUpdate: null,
+    roomTitle: roomFor(ctx, date),
     segments: [],
     windows: [],
     cutoffApplied: false,
+  }
+
+  const full = ups.find((u) => u.type === "full")
+  if (full) {
+    res.full = full
+    res.fullBranchWide = full.doctorId === null
   }
 
   const blk = ups.find((u) => u.type === "off" || u.type === "stop")
@@ -75,30 +103,28 @@ export function windowsFor(
 
   const docCut = laser ? ctx.laserCutoffs.find((c) => c.weekday === weekday) : undefined
   const brCut = laser ? ctx.branchLaserCutoffs.find((c) => c.weekday === weekday) : undefined
+  const laserStop = laser ? ups.find((u) => u.type === "laser_stop" && u.atTime) : undefined
+  const bookingCutoff = ups.find((u) => u.type === "booking_cutoff" && u.atTime)
 
   const out: Window[] = []
   for (const s0 of res.segments) {
     if (!compatible(service, s0.kind)) continue
     const w: Window = { from: s0.from, to: s0.to, cut: null, derma: s0.kind === "derma" }
-    if (laser) {
-      if (docCut) {
-        const c = hm(docCut.cutoff)
-        if (c < w.to) {
-          w.to = c
-          w.cut = c
-          res.cutoffApplied = true
-        }
-      }
-      // Branch cut-off only bites morning shifts (those starting before the threshold).
-      if (brCut && s0.from < hm(brCut.shiftStartsBefore)) {
-        const c = hm(brCut.cutoff)
-        if (c < w.to) {
-          w.to = c
-          w.cut = c
-          res.cutoffApplied = true
-        }
+    const clamp = (c: number) => {
+      if (c < w.to) {
+        w.to = c
+        w.cut = c
+        res.cutoffApplied = true
       }
     }
+    if (laser) {
+      if (docCut) clamp(hm(docCut.cutoff))
+      // Branch cut-off only bites morning shifts (those starting before the threshold).
+      if (brCut && s0.from < hm(brCut.shiftStartsBefore)) clamp(hm(brCut.cutoff))
+      if (laserStop?.atTime) clamp(hm(laserStop.atTime))
+    }
+    // booking_cutoff applies to every service (no booking at all after the time).
+    if (bookingCutoff?.atTime) clamp(hm(bookingCutoff.atTime))
     if (w.to > w.from) out.push(w)
   }
 
@@ -188,6 +214,16 @@ export function evalDoctor(
   // ----- date-based availability -----
   const w = windowsFor(ctx, { date, service })
   const dn = DAY_LABELS[w.weekday]
+
+  if (w.full) {
+    reasons.push(
+      w.fullBranchWide
+        ? `الفرع الحجز اكتمل يوم ${dn} — Update من الفرع`
+        : `الحجز اكتمل معاها يوم ${dn} — Update من الفرع`
+    )
+    if (w.full.note) reasons.push("الملاحظة: " + w.full.note)
+  }
+
   if (w.blocked) {
     if (w.branchWideBlock) {
       reasons.push(

@@ -9,7 +9,7 @@ export default async function BranchLayout({ children }: { children: React.React
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, full_name, is_active, branch_id, branches(name_ar)")
+    .select("role, full_name, is_active, branch_id, branches(name_ar, logo_url)")
     .eq("id", user.id)
     .single()
 
@@ -20,10 +20,17 @@ export default async function BranchLayout({ children }: { children: React.React
     redirect("/login")
   }
 
-  const branchName = (profile as { branches?: { name_ar?: string } }).branches?.name_ar
+  const branch = (profile as { branches?: { name_ar?: string; logo_url?: string | null } }).branches
 
   return (
-    <AppShell role="branch" userId={user.id} fullName={profile.full_name} subLabel={branchName}>
+    <AppShell
+      role="branch"
+      userId={user.id}
+      fullName={profile.full_name}
+      subLabel={branch?.name_ar}
+      logoSrc={branch?.logo_url ?? "/brand/innova-logo.svg"}
+      logoWordmark="innova"
+    >
       {children}
     </AppShell>
   )

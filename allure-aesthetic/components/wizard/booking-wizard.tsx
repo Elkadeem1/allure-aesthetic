@@ -26,27 +26,22 @@ import {
   availableDates,
   companionMissing,
   dayDiff,
+  decide,
   doctorNotes,
   doctorRuleReasons,
-  evalDoctor,
+  laserAreaPricing,
   laserMinutes,
-  laserPrice,
-  resolveTicketKind,
   sessionMinutes,
   startSlots,
   tLabel,
   toggleArea,
   weekdaySat0,
+  type Decision,
   type DoctorContext,
   type Service,
 } from "@/lib/engine"
 import type { BookingData, WizardBranch } from "@/lib/booking/data"
-import {
-  buildWhatsAppMessage,
-  decisionCardCopy,
-  decisionReasonText,
-  isEgyptMobile,
-} from "@/lib/booking/message"
+import { buildWhatsAppMessage, isEgyptMobile } from "@/lib/booking/message"
 import { sendTicket } from "@/app/(agent)/dashboard/book/actions"
 import type { ClientGender } from "@/lib/types/database.types"
 
@@ -121,16 +116,21 @@ function Chip({
   )
 }
 
+type LaserPricing = ReturnType<typeof laserAreaPricing>
+
 /* ---------- wizard -------------------------------------------------- */
 
 export function BookingWizard({
   data,
   initialBranchId,
+  layout = "page",
 }: {
   data: BookingData
   initialBranchId?: string
+  layout?: "page" | "drawer"
 }) {
   const router = useRouter()
+  const drawer = layout === "drawer"
   const { laserConfig: cfg, todayStr } = data
 
   const firstBranch = useMemo(
@@ -163,15 +163,25 @@ export function BookingWizard({
   const isLaser = !!service?.usesLaserAreas
 
   /* cascading resets */
-  const pickBranch = useCallback((id: string) => {
-    setBranchId(id)
+  const resetAfterBranch = useCallback(() => {
     setServiceCode(null)
     setGender(null)
     setAreas([])
     setDoctorId(null)
     setDate(null)
     setStartMin(null)
+    setName("")
+    setPhone("")
+    setNote("")
+    setBooked(false)
   }, [])
+  const pickBranch = useCallback(
+    (id: string) => {
+      setBranchId(id)
+      resetAfterBranch()
+    },
+    [resetAfterBranch]
+  )
   const pickService = useCallback((code: string) => {
     setServiceCode(code)
     setAreas([])
@@ -206,11 +216,12 @@ export function BookingWizard({
   }, [])
 
   const ctxFor = useCallback(
-    (doctorIdx: WizardBranch["doctors"][number]): DoctorContext => ({
-      doctor: doctorIdx.doctor,
-      schedules: doctorIdx.schedules,
-      laserCutoffs: doctorIdx.laserCutoffs,
+    (wd: WizardBranch["doctors"][number]): DoctorContext => ({
+      doctor: wd.doctor,
+      schedules: wd.schedules,
+      laserCutoffs: wd.laserCutoffs,
       branchLaserCutoffs: branch?.branchLaserCutoffs ?? [],
+      rooms: wd.rooms,
       updates: branch?.updates ?? [],
     }),
     [branch]
@@ -263,29 +274,30 @@ export function BookingWizard({
     return startSlots(ctxFor(selectedDoctor), { date, service, durationMin: duration }, cfg)
   }, [selectedDoctor, service, date, duration, cfg, ctxFor])
 
-  const decision = useMemo(() => {
-    if (!branch || !selectedDoctor || !date) return null
-    return resolveTicketKind(
-      selectedDoctor.doctor,
+  const decision: Decision | null = useMemo(() => {
+    if (!branch || !selectedDoctor || !service || !date) return null
+    return decide({
+      branchCode: branch.code,
+      hasTickets: branch.hasTickets,
+      doctor: selectedDoctor.doctor,
+      serviceCode: service.code,
       date,
-      todayStr,
-      branch.updates,
-      branch.policy
-    )
-  }, [branch, selectedDoctor, date, todayStr])
+      today: todayStr,
+      updates: branch.updates,
+    })
+  }, [branch, selectedDoctor, service, date, todayStr])
 
-  const price = useMemo(() => {
-    if (!isLaser || areas.length === 0) return null
-    return laserPrice(areas, branch?.laserPrices ?? [], cfg)
-  }, [isLaser, areas, branch, cfg])
+  const price: LaserPricing | null = useMemo(() => {
+    if (!isLaser || !gender || areas.length === 0 || !branch) return null
+    return laserAreaPricing(areas, gender, branch.priceBook, cfg)
+  }, [isLaser, gender, areas, branch, cfg])
 
   const laserDur = isLaser ? laserMinutes(areas, cfg) : null
 
-  const copy = decision ? decisionCardCopy(decision.kind) : null
+  const isTicket = decision?.ticket === "innova_ticket"
   const phoneValid = isEgyptMobile(phone)
   const complete = startMin != null && date != null
-  const canSend =
-    !!copy?.canSend && complete && name.trim().length > 0 && phoneValid && booked && !sending
+  const canSend = isTicket && complete && name.trim().length > 0 && phoneValid && booked && !sending
 
   const buildMsg = useCallback(() => {
     if (!branch || !selectedDoctor || !service || !gender || date == null || startMin == null)
@@ -314,6 +326,11 @@ export function BookingWizard({
       toast.error("مش قادر أنسخ — انسخ يدويًا")
     }
   }, [buildMsg])
+
+  const onDone = useCallback(() => {
+    resetAfterBranch()
+    toast.success("تمام — ابدأ حجز جديد")
+  }, [resetAfterBranch])
 
   const onSend = useCallback(async () => {
     if (!branch || !doctorId || !service || !gender || date == null || startMin == null) return
@@ -346,9 +363,29 @@ export function BookingWizard({
   const genderAreas = gender ? areasFor(gender, cfg.areas) : []
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-start">
+    <div
+      className={
+        drawer
+          ? "flex flex-col gap-4"
+          : "grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-start"
+      }
+    >
       {/* ---------- steps (right in RTL) ---------- */}
       <div className="space-y-4 min-w-0">
+        {/* Innova branch mark */}
+        {branch.logoUrl && (
+          <div className="flex items-center gap-2.5 bg-card border border-border rounded-xl px-4 py-3">
+            <img
+              src={branch.logoUrl}
+              alt={branch.nameAr}
+              className="h-7 w-auto max-w-[130px] object-contain object-right select-none"
+              draggable={false}
+            />
+            <span className="text-xs text-muted-foreground border-s border-border ps-2.5">
+              حجز لفرع {branch.nameAr}
+            </span>
+          </div>
+        )}
         {/* 1 — branch */}
         <StepCard n={1} icon={<Building2 size={15} />} title="الفرع">
           <div className="flex flex-wrap gap-2">
@@ -530,13 +567,10 @@ export function BookingWizard({
         )}
 
         {/* decision + send */}
-        {decision && copy && complete && (
+        {decision && complete && (
           <DecisionCard
-            copy={copy}
-            reason={decisionReasonText(decision.reason, {
-              doctorName: selectedDoctor!.doctor.displayName,
-              whenLabel: whenLabel(date!, todayStr),
-            })}
+            decision={decision}
+            isTicket={isTicket}
             name={name}
             phone={phone}
             phoneValid={phoneValid}
@@ -549,13 +583,15 @@ export function BookingWizard({
             onNote={setNote}
             onBooked={setBooked}
             onSend={onSend}
+            onDone={onDone}
             onCopy={copyMessage}
           />
         )}
       </div>
 
-      {/* ---------- live summary (left in RTL) ---------- */}
+      {/* ---------- live summary (left in RTL; stacks under steps in a drawer) ---------- */}
       <SummaryPanel
+        sticky={!drawer}
         branchName={branch.nameAr}
         serviceName={service ? branch.serviceNames[service.code] ?? service.code : null}
         gender={gender}
@@ -569,7 +605,8 @@ export function BookingWizard({
         doctorName={selectedDoctor?.doctor.displayName ?? null}
         dateLabel={date ? whenLabel(date, todayStr) : null}
         timeLabel={startMin != null ? `${tLabel(startMin)} – ${tLabel(startMin + duration)}` : null}
-        tone={copy?.tone ?? null}
+        decision={decision}
+        isTicket={isTicket}
       />
     </div>
   )
@@ -577,15 +614,23 @@ export function BookingWizard({
 
 /* ---------- decision card ------------------------------------------ */
 
-const TONE_STYLE = {
-  request: { bg: "var(--status-request-bg)", fg: "var(--status-request)", label: "طلب" },
-  notice: { bg: "var(--status-notice-bg)", fg: "var(--status-notice)", label: "إشعار" },
-  no_ticket: { bg: "var(--status-open-bg)", fg: "var(--status-open)", label: "من غير تيكت" },
-} as const
+function StatusBadge({ status }: { status: "Open" | "Confirmed" }) {
+  const confirmed = status === "Confirmed"
+  const bg = confirmed ? "var(--status-confirmed-bg)" : "var(--status-open-bg)"
+  const fg = confirmed ? "var(--status-confirmed)" : "var(--status-open)"
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold"
+      style={{ backgroundColor: bg, color: fg }}
+    >
+      {status}
+    </span>
+  )
+}
 
 function DecisionCard({
-  copy,
-  reason,
+  decision,
+  isTicket,
   name,
   phone,
   phoneValid,
@@ -598,10 +643,11 @@ function DecisionCard({
   onNote,
   onBooked,
   onSend,
+  onDone,
   onCopy,
 }: {
-  copy: ReturnType<typeof decisionCardCopy>
-  reason: string
+  decision: Decision
+  isTicket: boolean
   name: string
   phone: string
   phoneValid: boolean
@@ -614,82 +660,125 @@ function DecisionCard({
   onNote: (v: string) => void
   onBooked: (v: boolean) => void
   onSend: () => void
+  onDone: () => void
   onCopy: () => void
 }) {
-  const t = TONE_STYLE[copy.tone]
+  const accent = isTicket ? "var(--status-request)" : "var(--border)"
   return (
-    <section
-      className="rounded-xl border-2 p-4"
-      style={{ backgroundColor: t.bg, borderColor: t.fg }}
-    >
-      <div className="flex items-center gap-2">
-        <span
-          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold"
-          style={{ backgroundColor: t.fg, color: "white" }}
-        >
-          {t.label}
-        </span>
-        <h3 className="text-base font-bold" style={{ color: t.fg }}>
-          {copy.title}
+    <section className="rounded-xl border-2 p-4 bg-card" style={{ borderColor: accent }}>
+      <div className="flex items-center gap-2 flex-wrap">
+        {isTicket && (
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold"
+            style={{ backgroundColor: "var(--status-request)", color: "white" }}
+          >
+            تيكت إينوفا
+          </span>
+        )}
+        <h3 className="text-base font-bold text-foreground">
+          {isTicket ? "سجّل التيكت بعد ما تحجز في Dentolize" : "خطوات الحجز"}
         </h3>
       </div>
-      <p className="mt-2 text-sm font-medium text-foreground">{copy.instruction}</p>
-      {reason && <p className="mt-1 text-xs text-muted-foreground">{reason}</p>}
-      <p className="mt-2 text-xs text-foreground">
-        حالة Dentolize:{" "}
-        <b className="font-bold" style={{ color: t.fg }}>
-          {copy.dentolizeLabel}
-        </b>
+
+      <p className="mt-2 text-sm text-foreground flex items-center gap-2">
+        حالة Dentolize: <StatusBadge status={decision.status} />
+        {decision.statusNote && (
+          <span className="text-xs text-muted-foreground">— {decision.statusNote}</span>
+        )}
       </p>
 
-      {/* customer form */}
-      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div>
-          <label className="text-xs font-medium text-muted-foreground">اسم العميل</label>
-          <Input value={name} onChange={(e) => onName(e.target.value)} placeholder="الاسم" />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-muted-foreground">رقم الموبايل</label>
-          <Input
-            value={phone}
-            onChange={(e) => onPhone(e.target.value)}
-            placeholder="01xxxxxxxxx"
-            inputMode="tel"
-            dir="ltr"
-            aria-invalid={phone.length > 0 && !phoneValid}
-          />
-          {phone.length > 0 && !phoneValid && (
-            <p className="mt-0.5 text-[11px] text-destructive">رقم موبايل مصري غير صحيح</p>
-          )}
-        </div>
-      </div>
-      <div className="mt-2">
-        <label className="text-xs font-medium text-muted-foreground">ملاحظة (اختياري)</label>
-        <Input value={note} onChange={(e) => onNote(e.target.value)} placeholder="ملاحظة للفرع" />
-      </div>
-
-      {copy.canSend && (
-        <label className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={booked}
-            onChange={(e) => onBooked(e.target.checked)}
-            className="size-4 accent-[var(--primary)]"
-          />
-          حجزت على Dentolize
-        </label>
+      {/* steps */}
+      {decision.steps.length > 0 && (
+        <ol className="mt-3 space-y-1.5">
+          {decision.steps.map((s, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-foreground">
+              <span className="text-primary font-semibold tabular shrink-0 w-5">
+                {formatNumber(i + 1)}.
+              </span>
+              <span className="leading-relaxed">{s}</span>
+            </li>
+          ))}
+        </ol>
       )}
 
+      {/* info */}
+      {decision.info.map((t, i) => (
+        <p key={`i-${i}`} className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">
+          <Info size={12} className="mt-0.5 shrink-0 text-primary/70" />
+          {t}
+        </p>
+      ))}
+
+      {/* warns */}
+      {decision.warns.map((t, i) => (
+        <p
+          key={`w-${i}`}
+          className="mt-2 flex items-start gap-1.5 text-xs font-medium text-[var(--status-open)]"
+        >
+          <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+          {t}
+        </p>
+      ))}
+
+      {/* ticket form (Innova today/tomorrow only) */}
+      {isTicket && (
+        <>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">اسم العميل</label>
+              <Input value={name} onChange={(e) => onName(e.target.value)} placeholder="الاسم" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">رقم الموبايل</label>
+              <Input
+                value={phone}
+                onChange={(e) => onPhone(e.target.value)}
+                placeholder="01xxxxxxxxx"
+                inputMode="tel"
+                dir="ltr"
+                aria-invalid={phone.length > 0 && !phoneValid}
+              />
+              {phone.length > 0 && !phoneValid && (
+                <p className="mt-0.5 text-[11px] text-destructive">رقم موبايل مصري غير صحيح</p>
+              )}
+            </div>
+          </div>
+          <div className="mt-2">
+            <label className="text-xs font-medium text-muted-foreground">ملاحظة (اختياري)</label>
+            <Input value={note} onChange={(e) => onNote(e.target.value)} placeholder="ملاحظة للفرع" />
+          </div>
+          <label className="mt-3 flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={booked}
+              onChange={(e) => onBooked(e.target.checked)}
+              className="size-4 accent-[var(--primary)]"
+            />
+            حجزت على Dentolize
+          </label>
+        </>
+      )}
+
+      {/* actions */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {copy.canSend && (
+        {isTicket ? (
           <button
             type="button"
             disabled={!canSend}
             onClick={onSend}
-            className="inline-flex items-center gap-1.5 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-semibold shadow-sm hover:bg-[#1D4ED8] transition-colors disabled:opacity-50 disabled:pointer-events-none"
+            className="inline-flex items-center gap-1.5 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-semibold shadow-sm hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50 disabled:pointer-events-none"
           >
             {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            {copy.tone === "request" ? "ابعت الطلب" : "ابعت الإشعار"}
+            سجّل تيكت
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onDone}
+            className="inline-flex items-center gap-1.5 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-semibold shadow-sm hover:bg-[var(--primary-hover)] transition-colors"
+          >
+            <Check size={15} />
+            تم الحجز
           </button>
         )}
         <button
@@ -717,6 +806,7 @@ function SummaryRow({ label, value }: { label: string; value: React.ReactNode })
 }
 
 function SummaryPanel({
+  sticky,
   branchName,
   serviceName,
   gender,
@@ -727,22 +817,25 @@ function SummaryPanel({
   doctorName,
   dateLabel,
   timeLabel,
-  tone,
+  decision,
+  isTicket,
 }: {
+  sticky: boolean
   branchName: string
   serviceName: string | null
   gender: ClientGender | null
   isLaser: boolean
   areaLabels: string[]
   duration: number | null
-  price: ReturnType<typeof laserPrice> | null
+  price: LaserPricing | null
   doctorName: string | null
   dateLabel: string | null
   timeLabel: string | null
-  tone: "request" | "notice" | "no_ticket" | null
+  decision: Decision | null
+  isTicket: boolean
 }) {
   return (
-    <aside className="lg:sticky lg:top-0 bg-card border border-border rounded-xl p-4">
+    <aside className={cn("bg-card border border-border rounded-xl p-4", sticky && "lg:sticky lg:top-0")}>
       <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground mb-3">
         <Check size={15} className="text-primary" />
         ملخّص الحجز
@@ -764,7 +857,7 @@ function SummaryPanel({
         )}
       </div>
 
-      {price && (
+      {price && (price.lines.length > 0 || price.noStandalone.length > 0) && (
         <div className="mt-3 pt-3 border-t border-border">
           <p className="text-xs font-semibold text-muted-foreground mb-1.5">سعر الليزر</p>
           {price.lines.map((l, i) => (
@@ -773,32 +866,39 @@ function SummaryPanel({
               <span className="tabular text-foreground">يبدأ من {formatEgp(l.single)}</span>
             </div>
           ))}
-          <div className="flex items-center justify-between text-xs font-bold mt-1 pt-1 border-t border-border/60">
-            <span>الإجمالي (جلسة)</span>
-            <span className="tabular">{formatEgp(price.singleTotal)}</span>
-          </div>
+          {price.lines.length > 0 && (
+            <div className="flex items-center justify-between text-xs font-bold mt-1 pt-1 border-t border-border/60">
+              <span>الإجمالي (جلسة)</span>
+              <span className="tabular">{formatEgp(price.singleTotal)}</span>
+            </div>
+          )}
           {price.package3Total != null && (
             <div className="flex items-center justify-between text-xs text-muted-foreground mt-0.5">
               <span>باكدج ٣ جلسات</span>
               <span className="tabular">{formatEgp(price.package3Total)}</span>
             </div>
           )}
-          {price.unpriced.length > 0 && (
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              فيه مناطق سعرها مش متسجل — اسأل الفرع.
+          {price.noStandalone.map((u, i) => (
+            <p key={i} className="mt-1 text-[11px] text-muted-foreground">
+              {u.label}: مفيش سعر لوحدها
+              {u.bundle ? ` — بتتحسب مع «${u.bundle.label}»` : ""}
+              {u.pulse != null ? ` أو ${formatNumber(u.pulse)} ج / نبضة` : ""}.
             </p>
-          )}
+          ))}
         </div>
       )}
 
-      {tone && (
-        <div className="mt-3 pt-3 border-t border-border">
-          <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold"
-            style={{ backgroundColor: TONE_STYLE[tone].bg, color: TONE_STYLE[tone].fg }}
-          >
-            {TONE_STYLE[tone].label}
-          </span>
+      {decision && (
+        <div className="mt-3 pt-3 border-t border-border flex items-center gap-2">
+          <StatusBadge status={decision.status} />
+          {isTicket && (
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold"
+              style={{ backgroundColor: "var(--status-request-bg)", color: "var(--status-request)" }}
+            >
+              تيكت إينوفا
+            </span>
+          )}
         </div>
       )}
     </aside>

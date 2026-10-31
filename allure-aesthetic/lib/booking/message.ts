@@ -1,8 +1,8 @@
 // Booking-side copy helpers: Egyptian phone validation, the WhatsApp fallback
-// message (MVP style), decision-card presentation, and RPC error -> Arabic.
+// message (MVP style), and RPC error -> Arabic.
 
 import { DAY_LABELS, tLabel, weekdaySat0 } from "@/lib/engine"
-import type { Gender, LaserConfig, TicketKind } from "@/lib/engine"
+import type { Gender, LaserConfig } from "@/lib/engine"
 
 // Egyptian mobile: 010 / 011 / 012 / 015 + 8 digits.
 const EGYPT_MOBILE = /^01[0125]\d{8}$/
@@ -49,80 +49,25 @@ export function buildWhatsAppMessage(args: {
   ].join("\n")
 }
 
-// ---- decision card presentation ----
-export type DecisionTone = "request" | "notice" | "no_ticket"
-
-export type DecisionCardCopy = {
-  tone: DecisionTone
-  title: string
-  instruction: string
-  dentolizeLabel: string // the status to set in Dentolize
-  canSend: boolean
-}
-
-export function decisionCardCopy(kind: TicketKind | null): DecisionCardCopy {
-  if (kind === "request") {
-    return {
-      tone: "request",
-      title: "طلب حجز — محتاج رد الفرع",
-      instruction: "ابعت طلب للفرع واستنى الرد خلال ٥ دقايق.",
-      dentolizeLabel: "Open",
-      canSend: true,
-    }
-  }
-  if (kind === "notice") {
-    return {
-      tone: "notice",
-      title: "إشعار للفرع",
-      instruction: "احجز Confirmed على Dentolize وابعت إشعار للفرع.",
-      dentolizeLabel: "Confirmed",
-      canSend: true,
-    }
-  }
-  return {
-    tone: "no_ticket",
-    title: "مفيش تيكت",
-    instruction: "احجز Open على Dentolize. مفيش تيكت — الفرع هيأكد بنفسه.",
-    dentolizeLabel: "Open",
-    canSend: false,
-  }
-}
-
-/** Plain-Arabic one-liner explaining why, e.g. "د. هبة Open والميعاد بكرة". */
-export function decisionReasonText(
-  reasonCode: string,
-  args: { doctorName: string; whenLabel: string }
-): string {
-  const { doctorName, whenLabel } = args
-  switch (reasonCode) {
-    case "same_day_branch_rule":
-      return `نفس اليوم — الفرع لازم يوافق الأول (${whenLabel})`
-    case "doctor_confirmed":
-      return `${doctorName} Confirmed — إشعار بس`
-    case "open_turned_confirmed":
-      return `${doctorName} Open بس بتتأكد تلقائي في اليوم ده`
-    case "confirmed_turned_open":
-      return `${doctorName} اتحوّلت Open بأمر الفرع`
-    case "open_doctor_today_tomorrow":
-      return `${doctorName} Open والميعاد ${whenLabel}`
-    case "open_later_no_ticket":
-      return `${doctorName} Open والميعاد ${whenLabel} — الفرع هيأكد بنفسه`
-    default:
-      return ""
-  }
-}
-
 // ---- RPC error -> Arabic ----
 const RPC_ERRORS: Record<string, string> = {
   doctor_not_found: "الدكتورة مش موجودة.",
   service_not_found: "الخدمة مش موجودة.",
   service_not_offered_in_branch: "الخدمة دي مش متاحة في الفرع ده.",
+  // migration-6 create_ticket guards (Innova-only, today/tomorrow, full).
+  tickets_not_enabled_for_branch: "الفرع ده مابيتعملوش تيكتات — التيكتات لإينوفا بس.",
+  ticket_only_today_tomorrow: "التيكت بيتبعت للنهاردة أو بكرة بس.",
+  fully_booked: "الحجز اكتمل في اليوم ده — أجّل أو اختار يوم تاني.",
   date_in_past: "التاريخ فات — اختار يوم تاني.",
   doctor_does_not_accept_men: "الدكتورة دي بتستقبل سيدات بس.",
   branch_unavailable_on_date: "الفرع مقفول في اليوم ده.",
   doctor_unavailable_on_date: "الدكتورة مش متاحة في اليوم ده (غياب أو وقف حجز).",
   laser_areas_required: "اختار مناطق الليزر الأول.",
-  no_ticket_needed: "مفيش تيكت مطلوب — احجز Open على Dentolize والفرع هيأكد.",
+  no_ticket_needed: "مفيش تيكت مطلوب للفرع ده — اتبع الخطوات واضغط «تم الحجز».",
+  // branch_respond guards.
+  not_a_request: "التيكت ده إشعار مش طلب.",
+  invalid_response: "رد غير صحيح.",
+  offered_needs_time: "لازم وقت مع العرض.",
   not_allowed: "مش مسموح بالعملية دي.",
   ticket_not_found: "التيكت مش موجود.",
   ticket_not_answered: "التيكت لسه الفرع مردش عليه.",

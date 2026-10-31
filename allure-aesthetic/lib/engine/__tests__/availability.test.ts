@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest"
-import { evalDoctor, windowsFor } from "../availability"
+import { evalDoctor, roomFor, windowsFor } from "../availability"
 import { hm } from "../time"
+import type { DoctorUpdate } from "../types"
 import {
   CONSULT,
+  HEBA,
   LASER,
   LASER_CONFIG,
   SAT,
+  SUN,
   MON,
   WED,
   hebaCtx,
@@ -20,6 +23,20 @@ const laserArgs = (date: string, gender: "female" | "male", areas: string[]) => 
   service: LASER,
   gender,
   areas,
+})
+
+const upd = (over: Partial<DoctorUpdate>): DoctorUpdate => ({
+  id: "u",
+  doctorId: HEBA.id,
+  type: "off",
+  dateFrom: "2026-01-01",
+  dateTo: "2026-12-31",
+  atTime: null,
+  weekdays: [],
+  segments: [],
+  note: null,
+  createdAt: "2026-10-01T00:00:00Z",
+  ...over,
 })
 
 describe("Heba Ghonim (Tanta 1) — women only, rejects small-areas-only", () => {
@@ -96,5 +113,63 @@ describe("Kholoud Fayrouz (Kafr el-Sheikh) — Sat 10-2 laser only, 2-4 other se
     const r = evalDoctor(kholoudCtx(), laserArgs(SAT, "male", ["m_beard"]), LASER_CONFIG)
     expect(r.ok).toBe(false)
     expect(r.reasons).toContain("ممنوع ليزر رجالة معاها")
+  })
+})
+
+// ---- migration-6 additions ----
+
+describe("full (الحجز اكتمل) blocks booking", () => {
+  it("doctor/day full -> not available", () => {
+    const ctx = hebaCtx([upd({ type: "full", dateFrom: SAT, dateTo: SAT })])
+    const r = evalDoctor(ctx, laserArgs(SAT, "female", ["w_face"]), LASER_CONFIG)
+    expect(r.ok).toBe(false)
+    expect(r.reasons.some((x) => x.includes("الحجز اكتمل"))).toBe(true)
+  })
+
+  it("whole-branch full -> not available, with the branch wording", () => {
+    const ctx = hebaCtx([upd({ type: "full", doctorId: null, dateFrom: SAT, dateTo: SAT })])
+    const r = evalDoctor(ctx, laserArgs(SAT, "female", ["w_face"]), LASER_CONFIG)
+    expect(r.ok).toBe(false)
+    expect(r.reasons.some((x) => x.includes("الفرع الحجز اكتمل"))).toBe(true)
+  })
+})
+
+describe("laser_stop / booking_cutoff (at_time)", () => {
+  it("laser_stop clamps only laser windows", () => {
+    const ctx = hebaCtx([upd({ type: "laser_stop", atTime: "13:00", dateFrom: SAT, dateTo: SAT })])
+    const laserW = windowsFor(ctx, { date: SAT, service: LASER })
+    expect(laserW.windows).toEqual([{ from: hm("10:00"), to: hm("13:00"), cut: hm("13:00"), derma: false }])
+    const consultW = windowsFor(ctx, { date: SAT, service: CONSULT })
+    expect(consultW.windows).toEqual([{ from: hm("10:00"), to: hm("16:00"), cut: null, derma: false }])
+  })
+
+  it("booking_cutoff clamps every service", () => {
+    const ctx = hebaCtx([upd({ type: "booking_cutoff", atTime: "12:00", dateFrom: SAT, dateTo: SAT })])
+    const laserW = windowsFor(ctx, { date: SAT, service: LASER })
+    const consultW = windowsFor(ctx, { date: SAT, service: CONSULT })
+    expect(laserW.windows).toEqual([{ from: hm("10:00"), to: hm("12:00"), cut: hm("12:00"), derma: false }])
+    expect(consultW.windows).toEqual([{ from: hm("10:00"), to: hm("12:00"), cut: hm("12:00"), derma: false }])
+  })
+})
+
+describe("recurring updates (weekdays)", () => {
+  it("an off recurring on Saturdays blocks only Saturdays", () => {
+    const ctx = hebaCtx([
+      upd({ type: "off", weekdays: [0], dateFrom: "2026-10-01", dateTo: "2026-12-31" }),
+    ])
+    const sat = evalDoctor(ctx, laserArgs(SAT, "female", ["w_face"]), LASER_CONFIG)
+    expect(sat.ok).toBe(false)
+    expect(sat.reasons.some((x) => x.includes("غايبة يوم السبت"))).toBe(true)
+
+    const sun = evalDoctor(ctx, laserArgs(SUN, "female", ["w_face"]), LASER_CONFIG)
+    expect(sun.ok).toBe(true)
+  })
+})
+
+describe("roomFor (doctor_rooms by weekday)", () => {
+  it("resolves the room title for the date's weekday", () => {
+    const ctx = { ...hebaCtx(), rooms: [{ weekday: 0, title: "روم ١" }] }
+    expect(roomFor(ctx, SAT)).toBe("روم ١")
+    expect(roomFor(ctx, SUN)).toBeNull()
   })
 })

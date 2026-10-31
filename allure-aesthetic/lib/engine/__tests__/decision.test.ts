@@ -1,72 +1,99 @@
 import { describe, expect, it } from "vitest"
-import { resolveTicketKind } from "../decision"
-import type { DoctorUpdate } from "../types"
-import { HEBA, KHOLOUD, NOURHAN, MON, SAT, THU, TUE, WED, TANTA1_POLICY, TANTA2_POLICY } from "./fixtures"
+import { decide, type DecideArgs } from "../decision"
+import type { Doctor, DoctorUpdate } from "../types"
+import { EMAN, HEBA, NOURHAN, OLA, SAT, SUN, MON, THU } from "./fixtures"
 
-const statusUpdate = (
-  doctorId: string,
-  type: "open_slot" | "force_open",
-  date: string
-): DoctorUpdate => ({
-  id: `u-${type}`,
+const openSlot = (doctorId: string, date: string, note: string | null = null): DoctorUpdate => ({
+  id: "u-open-slot",
   doctorId,
-  type,
+  type: "open_slot",
   dateFrom: date,
   dateTo: date,
+  atTime: null,
+  weekdays: [],
   segments: [],
-  note: null,
+  note,
   createdAt: "2026-10-01T00:00:00Z",
 })
 
-describe("resolveTicketKind — mirrors the SQL resolve_ticket_kind", () => {
-  it("Tanta 1 Saturday: Open doctor auto-confirmed -> notice", () => {
-    expect(resolveTicketKind(HEBA, SAT, SAT, [], TANTA1_POLICY)).toEqual({
-      kind: "notice",
-      dentolizeStatus: "confirmed",
-      reason: "open_turned_confirmed",
-    })
+const run = (branchCode: string, doctor: Doctor, over: Partial<DecideArgs> = {}) =>
+  decide({
+    branchCode,
+    hasTickets: branchCode === "innova",
+    doctor,
+    serviceCode: "laser",
+    date: SAT,
+    today: SAT,
+    updates: [],
+    ...over,
   })
 
-  it("branch force_open for today overrides auto-confirm -> request/Open", () => {
-    const updates = [statusUpdate(HEBA.id, "force_open", SAT)]
-    expect(resolveTicketKind(HEBA, SAT, SAT, updates, TANTA1_POLICY)).toEqual({
-      kind: "request",
-      dentolizeStatus: "open",
-      reason: "open_doctor_today_tomorrow",
-    })
+describe("decide — Dentolize status + per-branch guidance (HTML decide port)", () => {
+  it("Tanta 1 Saturday: an Open doctor is confirmed by us", () => {
+    const d = run("tanta1", HEBA, { date: SAT, today: SAT })
+    expect(d.status).toBe("Confirmed")
+    expect(d.statusNote).toBe("السبت بنأكده إحنا")
+    expect(d.steps[0]).toContain("احجز في السيستم بحالة Confirmed")
+    expect(d.steps[0]).toContain("السبت بنأكده")
+    expect(d.ticket).toBe("none")
   })
 
-  it("branch open_slot for tomorrow -> notice/Confirmed", () => {
-    const updates = [statusUpdate(HEBA.id, "open_slot", TUE)]
-    expect(resolveTicketKind(HEBA, TUE, MON, updates, TANTA1_POLICY)).toEqual({
-      kind: "notice",
-      dentolizeStatus: "confirmed",
-      reason: "open_turned_confirmed",
-    })
+  it("Tanta 1 non-Saturday Open doctor: book Open and wait for the branch", () => {
+    const d = run("tanta1", HEBA, { date: SUN, today: SUN })
+    expect(d.status).toBe("Open")
+    expect(d.steps).toContain("احجز في السيستم بحالة Open")
+    expect(d.steps).toContain("استنى الفرع يأكد المعاد")
   })
 
-  it("Open doctor after tomorrow -> no ticket", () => {
-    // today = Monday, appointment = Thursday (not a Saturday, 3 days out)
-    expect(resolveTicketKind(HEBA, THU, MON, [], TANTA1_POLICY)).toEqual({
-      kind: null,
-      dentolizeStatus: "open",
-      reason: "open_later_no_ticket",
-    })
+  it("Tanta 2 same day: send to the group and wait for the reply", () => {
+    const d = run("tanta2", NOURHAN, { date: MON, today: MON })
+    expect(d.statusNote).toBe("بعد موافقة الفرع على الجروب")
+    expect(d.steps[0]).toContain("ابعت بيانات الحالة على الجروب")
   })
 
-  it("Confirmed doctor -> notice", () => {
-    expect(resolveTicketKind(KHOLOUD, WED, MON, [], TANTA1_POLICY)).toEqual({
-      kind: "notice",
-      dentolizeStatus: "confirmed",
-      reason: "doctor_confirmed",
-    })
+  it("New Cairo: always warns that times/prices differ and update often", () => {
+    const d = run("newcairo", NOURHAN, { date: MON, today: MON })
+    expect(d.warns.some((w) => w.includes("القاهرة الجديدة"))).toBe(true)
+    expect(d.info).toContain("كل الدكاترة بيشتغلوا للرجالة عادي.")
+    expect(d.status).toBe("Confirmed")
   })
 
-  it("Tanta 2 same-day rule forces a request even for a Confirmed doctor", () => {
-    expect(resolveTicketKind(NOURHAN, MON, MON, [], TANTA2_POLICY)).toEqual({
-      kind: "request",
-      dentolizeStatus: "open",
-      reason: "same_day_branch_rule",
+  it("New Cairo later date: book Open, call-center confirms", () => {
+    const d = run("newcairo", NOURHAN, { date: THU, today: MON })
+    expect(d.status).toBe("Open")
+    expect(d.steps.some((s) => s.includes("Open"))).toBe(true)
+  })
+
+  it("Shebin: no-overlap warnings, incl. the per-doctor one", () => {
+    const d = run("shebin", OLA, { date: SAT, today: SAT })
+    expect(d.warns.some((w) => w.includes("أوفر لاب"))).toBe(true)
+    expect(d.warns.some((w) => w.includes("بتاخد وقتها في السيشن"))).toBe(true)
+  })
+
+  it("Innova: always_open doctor books Open and an innova ticket is in play", () => {
+    const d = run("innova", EMAN, { date: SAT, today: SAT })
+    expect(d.status).toBe("Open")
+    expect(d.ticket).toBe("innova_ticket")
+    expect(d.info.some((i) => i.includes("في إينوفا بنحجز بحالة Open"))).toBe(true)
+  })
+
+  it("Innova consultation: shows the Re Cons note", () => {
+    const d = run("innova", EMAN, { date: SAT, today: SAT, serviceCode: "consult" })
+    expect(d.info.some((i) => i.includes("Re Cons"))).toBe(true)
+  })
+
+  it("Innova later date: no ticket", () => {
+    const d = run("innova", EMAN, { date: THU, today: MON })
+    expect(d.ticket).toBe("none")
+  })
+
+  it("open_slot update turns an Open booking into Confirmed", () => {
+    const d = run("innova", EMAN, {
+      date: SAT,
+      today: SAT,
+      updates: [openSlot(EMAN.id, SAT)],
     })
+    expect(d.status).toBe("Confirmed")
+    expect(d.info.some((i) => i.includes("الحجز اتحول لـ Confirmed"))).toBe(true)
   })
 })

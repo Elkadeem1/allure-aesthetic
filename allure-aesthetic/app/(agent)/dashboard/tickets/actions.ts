@@ -15,7 +15,7 @@ export async function closeTicketAction(
   const { error } = await supabase.rpc("close_ticket", {
     p_ticket_id: ticketId,
     p_outcome: outcome,
-    p_note: note?.trim() || null,
+    p_note: note?.trim() || undefined,
   })
   if (error) return { ok: false, error: mapRpcError(error.message) }
   return { ok: true }

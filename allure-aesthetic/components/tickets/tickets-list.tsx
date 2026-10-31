@@ -9,7 +9,24 @@ import { formatNumber } from "@/lib/format"
 import type { Database, TicketOutcome } from "@/lib/types/database.types"
 import { cancelTicketAction, closeTicketAction } from "@/app/(agent)/dashboard/tickets/actions"
 
-type Ticket = Database["public"]["Views"]["ticket_board"]["Row"]
+// The ticket_board view predates migration 6 and lacks offered_time, so we
+// carry it alongside (merged from the tickets table on load / refetch). The
+// generated view marks every column nullable; id/ticket_no are always present.
+export type Ticket = Omit<Database["public"]["Views"]["ticket_board"]["Row"], "id" | "ticket_no"> & {
+  id: string
+  ticket_no: number
+  offered_time: string | null
+}
+
+/** The ticket_board view has no offered_time column — fetch it from tickets. */
+async function offeredTimeMap(
+  supabase: ReturnType<typeof createClient>,
+  ids: string[]
+): Promise<Map<string, string | null>> {
+  if (ids.length === 0) return new Map()
+  const { data } = await supabase.from("tickets").select("id, offered_time").in("id", ids)
+  return new Map((data ?? []).map((t) => [t.id, t.offered_time]))
+}
 
 /* ---------- helpers ---------- */
 
@@ -43,10 +60,9 @@ function playDing() {
 }
 
 const RESPONSE_LABELS: Record<string, string> = {
-  agent_confirm: "كلّم العميل وأكّد",
-  branch_confirm: "الفرع هيأكد مع العميل",
-  counter_offer: "الفرع اقترح ميعاد بديل",
-  unavailable: "الفرع قال مش متاح",
+  offered: "الفرع عرض ميعاد فاضي",
+  full: "مفيش مواعيد — أجّل",
+  confirmed: "الفرع أكّد (Confirmed)",
 }
 
 const OUTCOME_LABELS: Record<string, string> = {
@@ -61,13 +77,11 @@ const OUTCOME_LABELS: Record<string, string> = {
 
 export function TicketsList({
   initialTickets,
-  doctorNames,
   userId,
   mineOnly,
   orFilter,
 }: {
   initialTickets: Ticket[]
-  doctorNames: Record<string, string>
   userId: string
   mineOnly: boolean
   orFilter: string
@@ -86,8 +100,18 @@ export function TicketsList({
       .or(orFilter)
       .order("created_at", { ascending: false })
     if (mineOnly) q = q.eq("created_by", userId)
-    const { data } = await q
-    if (!data) return
+    const { data: rows } = await q
+    if (!rows) return
+    const offMap = await offeredTimeMap(
+      supabase,
+      rows.map((r) => r.id).filter((x): x is string => !!x)
+    )
+    const data: Ticket[] = rows.map((r) => ({
+      ...r,
+      id: r.id as string,
+      ticket_no: r.ticket_no as number,
+      offered_time: r.id ? offMap.get(r.id) ?? null : null,
+    }))
 
     // Detect a branch answer / acknowledgement on one of MY tickets.
     const prev = new Map(ticketsRef.current.map((t) => [t.id, t]))
@@ -153,7 +177,6 @@ export function TicketsList({
         <TicketCard
           key={t.id}
           ticket={t}
-          doctorNames={doctorNames}
           highlighted={highlight.has(t.id)}
           onChanged={refetch}
         />
@@ -232,12 +255,10 @@ function StatusChip({ ticket }: { ticket: Ticket }) {
 
 function TicketCard({
   ticket: t,
-  doctorNames,
   highlighted,
   onChanged,
 }: {
   ticket: Ticket
-  doctorNames: Record<string, string>
   highlighted: boolean
   onChanged: () => void
 }) {
@@ -278,9 +299,9 @@ function TicketCard({
   const canCancel = t.status === "pending" || t.status === "answered"
   const showCloseButtons =
     t.status === "answered" &&
-    (t.branch_response === "agent_confirm" ||
-      t.branch_response === "counter_offer" ||
-      t.branch_response === "unavailable")
+    (t.branch_response === "offered" ||
+      t.branch_response === "full" ||
+      t.branch_response === "confirmed")
 
   return (
     <div
@@ -328,17 +349,12 @@ function TicketCard({
             <Phone size={13} className="text-primary" />
             {RESPONSE_LABELS[t.branch_response] ?? t.branch_response}
           </p>
-          {t.branch_response === "counter_offer" && (
+          {t.branch_response === "offered" && t.offered_time && (
             <p className="mt-1 text-xs text-foreground flex items-center gap-1.5">
               <CalendarClock size={12} className="text-muted-foreground" />
               <span dir="ltr" className="tabular">
-                {ddmm(t.counter_date)} · {hhmm(t.counter_start_time)}
+                {ddmm(t.appt_date)} · {hhmm(t.offered_time)}
               </span>
-              {t.counter_doctor_id && (
-                <span className="text-muted-foreground">
-                  — {doctorNames[t.counter_doctor_id] ?? ""}
-                </span>
-              )}
             </p>
           )}
           {t.response_note && (
@@ -372,10 +388,10 @@ function TicketCard({
             type="button"
             disabled={busy}
             onClick={() => close("customer_confirmed")}
-            className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-[#1D4ED8] transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
           >
             <Check size={13} />
-            اتأكد
+            العميل وافق
           </button>
           <button
             type="button"
@@ -413,7 +429,7 @@ function TicketCard({
                 type="button"
                 disabled={busy || reason.trim().length === 0}
                 onClick={doCancel}
-                className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-destructive text-destructive-foreground text-xs font-semibold hover:bg-[#B91C1C] transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-destructive text-destructive-foreground text-xs font-semibold hover:bg-[var(--destructive-hover)] transition-colors disabled:opacity-50"
               >
                 تأكيد الإلغاء
               </button>

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { cairoDayRange } from "@/lib/time"
-import { TicketsList } from "@/components/tickets/tickets-list"
+import { TicketsList, type Ticket } from "@/components/tickets/tickets-list"
 
 export default async function TicketsPage() {
   const supabase = await createClient()
@@ -30,25 +30,32 @@ export default async function TicketsPage() {
     .order("created_at", { ascending: false })
   if (mineOnly) query = query.eq("created_by", user!.id)
 
-  const [{ data: tickets }, { data: doctors }] = await Promise.all([
-    query,
-    supabase.from("doctors").select("id, display_name"),
-  ])
+  const { data: rows } = await query
 
-  const doctorNames = Object.fromEntries((doctors ?? []).map((d) => [d.id, d.display_name]))
+  // ticket_board has no offered_time (it predates migration 6) — merge it in.
+  const ids = (rows ?? []).map((r) => r.id).filter((x): x is string => !!x)
+  const { data: offs } = ids.length
+    ? await supabase.from("tickets").select("id, offered_time").in("id", ids)
+    : { data: [] }
+  const offMap = new Map((offs ?? []).map((o) => [o.id, o.offered_time]))
+  const tickets: Ticket[] = (rows ?? []).map((r) => ({
+    ...r,
+    id: r.id as string,
+    ticket_no: r.ticket_no as number,
+    offered_time: r.id ? offMap.get(r.id) ?? null : null,
+  }))
 
   return (
     <div className="max-w-4xl">
       <div className="mb-4">
-        <h1 className="text-xl font-bold text-foreground">تيكتاتي</h1>
+        <h1 className="text-xl font-bold text-foreground">My Tickets</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           {mineOnly ? "التيكتات اللي بعتّها النهاردة" : "كل تيكتات النهاردة"}
         </p>
       </div>
 
       <TicketsList
-        initialTickets={tickets ?? []}
-        doctorNames={doctorNames}
+        initialTickets={tickets}
         userId={user!.id}
         mineOnly={mineOnly}
         orFilter={orFilter}

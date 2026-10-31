@@ -1,69 +1,43 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import Link from "next/link"
-import { format } from "date-fns"
-import { MapPin, CreditCard, ListOrdered, AlertTriangle, ChevronDown, ChevronUp, BookOpen } from "lucide-react"
+import { MapPin, CreditCard, Megaphone } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { cairoToday } from "@/lib/time"
-import { DoctorScheduleTable } from "./doctor-schedule"
+import { BrandLogo } from "@/components/app/brand-logo"
+import { TodayStrip, BranchSchedule } from "./doctor-schedule"
 import { PriceCatalogue } from "./price-catalogue"
 import { SidePanel } from "./side-panel"
+import { upsList, type BannerRow } from "./schedule-utils"
 import { formatEgp, formatNumber } from "@/lib/format"
-import type { BranchData, DoctorUpdate, KbArticle } from "./types"
+import type { BranchData, ConsultRow, DoctorUpdate } from "./types"
 
-const CONSULT_LABELS: Record<string, string> = {
-  derma:      "كشف جلدية",
-  hair:       "كشف شعر",
-  derma_hair: "كشف جلد + شعر",
-  recons:     "إعادة كشف",
-  pulse:      "سعر النبضة",
+function formatConsultPrice(row: ConsultRow): string {
+  if (row.priceText) return row.priceText
+  if (row.price === null) return "—"
+  return formatEgp(row.price)
 }
 
-// Pulse is a per-pulse unit price (e.g. "1 ج / نبضة"); other consultations are
-// plain amounts.
-function formatConsultPrice(kind: string, price: number) {
-  return kind === "pulse" ? `${formatNumber(price)} ج / نبضة` : formatEgp(price)
-}
-
-const UPDATE_TYPE_LABELS: Record<string, string> = {
-  off:       "غايبة",
-  stop:      "وقف حجز",
-  hours:     "ساعات مختلفة",
-  open_slot: "الدور فاضي",
-  note:      "ملاحظة",
-}
-
-const UPDATE_BANNER_STYLE: Record<string, { bg: string; text: string; border: string }> = {
-  off:       { bg: "bg-[var(--status-breach-bg)]",    text: "text-[var(--status-breach)]",   border: "border-[var(--status-breach)]" },
-  stop:      { bg: "bg-[var(--status-open-bg)]",      text: "text-[var(--status-open)]",     border: "border-[var(--status-open)]" },
-  hours:     { bg: "bg-[var(--status-request-bg)]",   text: "text-[var(--status-request)]",  border: "border-[var(--status-request)]" },
-  open_slot: { bg: "bg-[var(--status-confirmed-bg)]", text: "text-[var(--status-confirmed)]", border: "border-[var(--status-confirmed)]" },
-  note:      { bg: "bg-[var(--status-notice-bg)]",    text: "text-[var(--status-notice)]",   border: "border-[var(--status-notice)]" },
-}
-
-function addDays(dateStr: string, n: number) {
-  const d = new Date(dateStr + "T00:00:00")
-  d.setDate(d.getDate() + n)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-}
-
-function getActiveBannerUpdates(updates: DoctorUpdate[], todayStr: string) {
-  const tomorrow = addDays(todayStr, 1)
-  return updates.filter(
-    (u) =>
-      (u.dateFrom <= todayStr && u.dateTo >= todayStr) ||
-      (u.dateFrom <= tomorrow && u.dateTo >= tomorrow)
-  )
+// Dot colour per update type for the banner.
+const BANNER_DOT: Record<string, string> = {
+  off: "var(--status-breach)",
+  full: "var(--status-breach)",
+  stop: "var(--status-open)",
+  booking_cutoff: "var(--status-open)",
+  laser_stop: "var(--status-open)",
+  hours: "var(--status-request)",
+  open_slot: "var(--status-confirmed)",
+  force_open: "var(--status-confirmed)",
+  note: "var(--status-notice)",
 }
 
 type Props = {
   branches: BranchData[]
+  initialCat?: string
 }
 
-export function BranchTabs({ branches }: Props) {
+export function BranchTabs({ branches, initialCat }: Props) {
   const [activeIdx, setActiveIdx] = useState(0)
-  const [weekOffset, setWeekOffset] = useState(0)
   const [search, setSearch] = useState("")
   const [sidePanelSlug, setSidePanelSlug] = useState<string | null>(null)
   const [doctorUpdates, setDoctorUpdates] = useState<DoctorUpdate[]>(
@@ -72,8 +46,8 @@ export function BranchTabs({ branches }: Props) {
   const todayStr = cairoToday()
 
   const branch = branches[activeIdx]
+  const allKbArticles = branch.kbArticles
 
-  // Remember the active branch so Ctrl+B / the wizard can preselect it.
   useEffect(() => {
     try {
       localStorage.setItem("allure.lastBranchId", branch.id)
@@ -82,110 +56,65 @@ export function BranchTabs({ branches }: Props) {
     }
   }, [branch.id])
 
-  // Build a combined kb lookup across all branches
-  const allKbArticles = branch.kbArticles
-
   const handleTabChange = useCallback((idx: number) => {
     setActiveIdx(idx)
-    setWeekOffset(0)
     setSearch("")
     setSidePanelSlug(null)
   }, [])
 
-  // Realtime subscriptions on doctor_updates
+  // Realtime: keep doctor_updates fresh (banner + schedule cells).
   useEffect(() => {
     const supabase = createClient()
+    const mapRow = (row: {
+      id: string; doctor_id: string | null; type: string; date_from: string;
+      date_to: string; at_time: string | null; weekdays: number[] | null; note: string | null; segments: unknown
+    }): DoctorUpdate => ({
+      id: row.id,
+      doctorId: row.doctor_id,
+      type: row.type,
+      dateFrom: row.date_from,
+      dateTo: row.date_to,
+      atTime: row.at_time,
+      weekdays: row.weekdays ?? [],
+      note: row.note,
+      segments: (row.segments as Array<{ start: string; end: string; kind?: string }>) ?? [],
+    })
     const channel = supabase
       .channel("dashboard-updates")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "doctor_updates" },
-        (payload) => {
-          const row = payload.new as {
-            id: string; branch_id: string; doctor_id: string; type: string;
-            date_from: string; date_to: string; note: string | null; segments: unknown
-          }
-          setDoctorUpdates((prev) => [
-            ...prev,
-            {
-              id: row.id,
-              doctorId: row.doctor_id,
-              type: row.type,
-              dateFrom: row.date_from,
-              dateTo: row.date_to,
-              note: row.note,
-              segments: (row.segments as Array<{ start: string; end: string; kind?: string }>) ?? [],
-            },
-          ])
-        }
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "doctor_updates" }, (p) =>
+        setDoctorUpdates((prev) => [...prev, mapRow(p.new as Parameters<typeof mapRow>[0])])
       )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "doctor_updates" },
-        (payload) => {
-          const row = payload.new as {
-            id: string; branch_id: string; doctor_id: string; type: string;
-            date_from: string; date_to: string; note: string | null; segments: unknown
-          }
-          setDoctorUpdates((prev) =>
-            prev.map((u) =>
-              u.id === row.id
-                ? {
-                    ...u,
-                    type: row.type,
-                    dateFrom: row.date_from,
-                    dateTo: row.date_to,
-                    note: row.note,
-                    segments: (row.segments as Array<{ start: string; end: string; kind?: string }>) ?? [],
-                  }
-                : u
-            )
-          )
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "doctor_updates" },
-        (payload) => {
-          const id = (payload.old as { id: string }).id
-          setDoctorUpdates((prev) => prev.filter((u) => u.id !== id))
-        }
-      )
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "doctor_updates" }, (p) => {
+        const row = mapRow(p.new as Parameters<typeof mapRow>[0])
+        setDoctorUpdates((prev) => prev.map((u) => (u.id === row.id ? row : u)))
+      })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "doctor_updates" }, (p) => {
+        const id = (p.old as { id: string }).id
+        setDoctorUpdates((prev) => prev.filter((u) => u.id !== id))
+      })
       .subscribe()
-
     return () => {
       supabase.removeChannel(channel)
     }
   }, [])
 
+  // This branch's updates (per-doctor + branch-wide incl. full).
   const branchUpdates = doctorUpdates.filter(
-    (u) => branch.doctors.some((d) => d.id === u.doctorId)
+    (u) => branch.doctors.some((d) => d.id === u.doctorId) || branch.doctorUpdates.some((bu) => bu.id === u.id)
   )
-  const bannerUpdates = getActiveBannerUpdates(branchUpdates, todayStr)
+  const doctorName = useCallback(
+    (id: string | null) => (id ? branch.doctors.find((d) => d.id === id)?.displayName ?? "—" : "الفرع كله"),
+    [branch.doctors]
+  )
+  const bannerRows = upsList(branchUpdates, doctorName, todayStr, 7)
 
   const openPanel = useCallback((slug: string) => setSidePanelSlug(slug), [])
   const closePanel = useCallback(() => setSidePanelSlug(null), [])
-
-  const sidePanelArticle = sidePanelSlug
-    ? allKbArticles.find((a) => a.slug === sidePanelSlug)
-    : null
+  const sidePanelArticle = sidePanelSlug ? allKbArticles.find((a) => a.slug === sidePanelSlug) : null
 
   return (
     <div className="space-y-4">
-      {/* Header: title + primary "new booking" action */}
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-foreground">الفروع</h1>
-        <Link
-          href={`/dashboard/book?branch=${branch.id}`}
-          className="inline-flex items-center gap-1.5 px-4 h-9 rounded-lg bg-primary text-primary-foreground text-sm font-semibold shadow-sm hover:bg-[#1D4ED8] transition-colors"
-        >
-          <BookOpen size={15} />
-          حجز جديد
-          <kbd className="hidden sm:inline-flex items-center text-[10px] font-mono opacity-70 ms-1">
-            Ctrl+B
-          </kbd>
-        </Link>
-      </div>
+      <h1 className="text-xl font-bold text-foreground">Branches</h1>
 
       {/* Branch tabs */}
       <div className="flex gap-1 bg-card border border-border rounded-xl p-1 overflow-x-auto">
@@ -193,49 +122,45 @@ export function BranchTabs({ branches }: Props) {
           <button
             key={b.id}
             onClick={() => handleTabChange(i)}
-            className={`shrink-0 text-sm font-medium py-2 px-4 rounded-lg transition-colors ${
+            className={`shrink-0 inline-flex items-center gap-1.5 text-sm font-medium py-2 px-4 rounded-lg transition-colors ${
               i === activeIdx
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
             }`}
           >
+            {b.logoUrl && (
+              <BrandLogo
+                src={b.logoUrl}
+                alt={b.nameAr}
+                wordmark=""
+                imgClassName={`h-4 w-auto max-w-[56px] object-contain ${i === activeIdx ? "brightness-0 invert" : ""}`}
+              />
+            )}
             {b.nameAr}
           </button>
         ))}
       </div>
 
-      {/* Branch header */}
       <BranchHeader branch={branch} onChipClick={openPanel} />
 
-      {/* Active updates banner */}
-      {bannerUpdates.length > 0 && (
-        <UpdatesBanner
-          updates={bannerUpdates}
-          doctors={branch.doctors}
-          todayStr={todayStr}
-        />
-      )}
+      {/* Today / tomorrow */}
+      <TodayStrip doctors={branch.doctors} updates={branchUpdates} todayStr={todayStr} />
 
-      {/* Doctor schedule */}
-      <DoctorScheduleTable
-        doctors={branch.doctors}
-        doctorUpdates={branchUpdates}
-        weekOffset={weekOffset}
+      {/* Updates — next 7 days */}
+      {bannerRows.length > 0 && <UpdatesBanner rows={bannerRows} />}
+
+      {/* Schedule: week table / day timeline */}
+      <BranchSchedule
+        branch={{ doctors: branch.doctors, rooms: branch.rooms.map((r) => ({ id: r.id, title: r.title })) }}
         todayStr={todayStr}
-        onPrev={() => setWeekOffset((o) => o - 1)}
-        onNext={() => setWeekOffset((o) => o + 1)}
-        onToday={() => setWeekOffset(0)}
+        updates={branchUpdates}
       />
 
-      {/* Booking rules */}
-      {branch.bookingRules.length > 0 && (
-        <BookingRulesList rules={branch.bookingRules} />
-      )}
-
-      {/* Price catalogue */}
       {branch.priceCategories.length > 0 && (
         <PriceCatalogue
           categories={branch.priceCategories}
+          laserTable={branch.laserTable}
+          initialOpen={initialCat}
           search={search}
           onSearch={setSearch}
           kbArticles={allKbArticles}
@@ -243,10 +168,31 @@ export function BranchTabs({ branches }: Props) {
         />
       )}
 
-      {/* Side panel */}
-      {sidePanelArticle && (
-        <SidePanel article={sidePanelArticle} onClose={closePanel} />
-      )}
+      {sidePanelArticle && <SidePanel article={sidePanelArticle} onClose={closePanel} />}
+    </div>
+  )
+}
+
+/* ---------- Updates banner (next 7 days) ---------- */
+
+function UpdatesBanner({ rows }: { rows: BannerRow[] }) {
+  const shown = rows.slice(0, 6)
+  const extra = rows.length - shown.length
+  return (
+    <div className="bg-card border border-border rounded-xl px-4 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Megaphone size={14} className="text-primary" />
+        <h2 className="text-xs font-semibold text-foreground">Updates الأسبوع الجاي</h2>
+      </div>
+      <div className="flex flex-col gap-1">
+        {shown.map((r) => (
+          <div key={r.id} className="flex items-start gap-2 text-xs text-foreground">
+            <span className="inline-block size-1.5 rounded-full shrink-0 mt-1.5" style={{ backgroundColor: BANNER_DOT[r.type] ?? "var(--status-notice)" }} />
+            <span>{r.text}</span>
+          </div>
+        ))}
+        {extra > 0 && <div className="text-xs text-muted-foreground ps-3.5">… و{formatNumber(extra)} كمان</div>}
+      </div>
     </div>
   )
 }
@@ -260,13 +206,18 @@ function BranchHeader({
   branch: BranchData
   onChipClick: (slug: string) => void
 }) {
-  // Group consultation prices: branch defaults (no doctorId) + per-doctor overrides
-  const defaultPrices = branch.consultationPrices.filter((p) => !p.doctorId)
-  const overridePrices = branch.consultationPrices.filter((p) => !!p.doctorId)
-
   return (
     <div className="bg-card border border-border rounded-xl px-5 py-4 space-y-4">
-      {/* Address + payment methods row */}
+      {branch.logoUrl && (
+        <div className="flex items-center gap-3 border-b border-border pb-3 -mt-0.5">
+          <BrandLogo
+            src={branch.logoUrl}
+            alt={branch.nameAr}
+            wordmark={branch.nameAr}
+            imgClassName="h-8 w-auto max-w-[150px] object-contain object-right"
+          />
+        </div>
+      )}
       <div className="flex flex-wrap items-start gap-x-6 gap-y-2">
         {branch.address && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -278,10 +229,7 @@ function BranchHeader({
           <div className="flex items-center gap-2 flex-wrap">
             <CreditCard size={14} className="shrink-0 text-primary/70" />
             {branch.paymentMethods.map((pm) => (
-              <span
-                key={pm}
-                className="text-xs px-2 py-0.5 rounded-full bg-muted text-foreground font-medium"
-              >
+              <span key={pm} className="text-xs px-2 py-0.5 rounded-full bg-muted text-foreground font-medium">
                 {pm}
               </span>
             ))}
@@ -289,35 +237,33 @@ function BranchHeader({
         )}
       </div>
 
-      {/* Consultation prices */}
-      {defaultPrices.length > 0 && (
+      {/* Consultations + pulse */}
+      {(branch.consultations.length > 0 || branch.pulseFemale != null || branch.pulseMale != null) && (
         <div>
-          <p className="text-xs font-semibold text-muted-foreground mb-2">الكشوفات</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-            {defaultPrices.map((cp) => {
-              const override = overridePrices.filter((o) => o.kind === cp.kind)
-              return (
-                <div
-                  key={cp.kind}
-                  className="bg-muted/40 rounded-lg px-3 py-2 text-xs"
-                >
-                  <p className="text-muted-foreground">{CONSULT_LABELS[cp.kind] ?? cp.kind}</p>
-                  <p className="font-bold text-foreground tabular mt-0.5">
-                    {formatConsultPrice(cp.kind, cp.price)}
-                  </p>
-                  {override.map((o) => (
-                    <p key={o.doctorId} className="text-[10px] text-muted-foreground mt-0.5">
-                      {o.doctorName}: {formatConsultPrice(o.kind, o.price)}
-                    </p>
-                  ))}
-                </div>
-              )
-            })}
+          <p className="text-xs font-semibold text-muted-foreground mb-2">الكشوفات والنبضة</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {branch.consultations.map((c) => (
+              <div key={c.code} className="bg-muted/40 rounded-lg px-3 py-2 text-xs">
+                <p className="text-muted-foreground leading-snug">{c.label}</p>
+                <p className="font-bold text-foreground tabular mt-0.5">{formatConsultPrice(c)}</p>
+              </div>
+            ))}
+            {branch.pulseFemale != null && (
+              <div className="bg-muted/40 rounded-lg px-3 py-2 text-xs">
+                <p className="text-muted-foreground">سعر النبضة — سيدات</p>
+                <p className="font-bold text-foreground tabular mt-0.5">{formatNumber(branch.pulseFemale)} ج / نبضة</p>
+              </div>
+            )}
+            {branch.pulseMale != null && (
+              <div className="bg-muted/40 rounded-lg px-3 py-2 text-xs">
+                <p className="text-muted-foreground">سعر النبضة — رجال</p>
+                <p className="font-bold text-foreground tabular mt-0.5">{formatNumber(branch.pulseMale)} ج / نبضة</p>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Service chips */}
       {branch.services.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {branch.services.map((svc) => (
@@ -336,105 +282,5 @@ function BranchHeader({
         </div>
       )}
     </div>
-  )
-}
-
-/* ---------- Updates Banner ------------------------------------------- */
-
-function UpdatesBanner({
-  updates,
-  doctors,
-  todayStr,
-}: {
-  updates: DoctorUpdate[]
-  doctors: BranchData["doctors"]
-  todayStr: string
-}) {
-  const doctorMap = new Map(doctors.map((d) => [d.id, d.displayName]))
-  const tomorrow = addDays(todayStr, 1)
-
-  const items = updates.map((u) => {
-    const style = UPDATE_BANNER_STYLE[u.type] ?? UPDATE_BANNER_STYLE.note
-    const coversToday = u.dateFrom <= todayStr && u.dateTo >= todayStr
-    const coversTomorrow = u.dateFrom <= tomorrow && u.dateTo >= tomorrow
-    const when = coversToday && coversTomorrow ? "اليوم وغداً" : coversToday ? "اليوم" : "غداً"
-    return {
-      ...u,
-      style,
-      when,
-      doctorName: u.doctorId ? doctorMap.get(u.doctorId) ?? "—" : "الفرع كله",
-    }
-  })
-
-  return (
-    <div className="bg-card border border-border rounded-xl px-4 py-3 space-y-2">
-      <div className="flex items-center gap-2 mb-1">
-        <AlertTriangle size={14} className="text-[var(--status-open)]" />
-        <h2 className="text-xs font-semibold text-foreground">تحديثات نشطة</h2>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {items.map((u) => (
-          <div
-            key={u.id}
-            className={`flex items-start gap-3 px-3 py-2 rounded-lg border-s-2 ${u.style.bg} ${u.style.border}`}
-          >
-            <div className="flex-1 min-w-0">
-              <span className={`text-xs font-semibold ${u.style.text}`}>
-                {UPDATE_TYPE_LABELS[u.type] ?? u.type}
-              </span>
-              <span className="text-xs text-muted-foreground mx-2">—</span>
-              <span className="text-xs font-medium text-foreground">{u.doctorName}</span>
-              {u.note && (
-                <span className="text-xs text-muted-foreground ms-1">({u.note})</span>
-              )}
-            </div>
-            <span className="text-xs text-muted-foreground shrink-0">{u.when}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/* ---------- Booking Rules -------------------------------------------- */
-
-function BookingRulesList({ rules }: { rules: string[] }) {
-  const [expanded, setExpanded] = useState(false)
-  const visible = expanded ? rules : rules.slice(0, 3)
-  const hasMore = rules.length > 3
-
-  return (
-    <section className="bg-card border border-border rounded-xl px-5 py-4">
-      <div className="flex items-center gap-2 mb-3">
-        <ListOrdered size={14} className="text-primary/70" />
-        <h2 className="text-sm font-semibold text-foreground">قواعد الحجز</h2>
-      </div>
-      <ol className="space-y-2">
-        {visible.map((rule, i) => (
-          <li key={i} className="flex items-start gap-2 text-sm text-foreground">
-            <span className="text-primary font-semibold tabular shrink-0 w-5">{i + 1}.</span>
-            <span className="leading-relaxed">{rule}</span>
-          </li>
-        ))}
-      </ol>
-      {hasMore && (
-        <button
-          onClick={() => setExpanded((e) => !e)}
-          className="flex items-center gap-1 mt-3 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
-        >
-          {expanded ? (
-            <>
-              <ChevronUp size={13} />
-              عرض أقل
-            </>
-          ) : (
-            <>
-              <ChevronDown size={13} />
-              عرض {rules.length - 3} قاعدة أخرى
-            </>
-          )}
-        </button>
-      )}
-    </section>
   )
 }

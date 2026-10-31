@@ -21,7 +21,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <AppShell role="admin" userId={user.id} fullName={profile.full_name}>
+    <AppShell
+      role="admin"
+      userId={user.id}
+      fullName={profile.full_name}
+      logoSrc="/brand/allure-logo.svg"
+      logoWordmark="Allure"
+    >
       {children}
     </AppShell>
   )

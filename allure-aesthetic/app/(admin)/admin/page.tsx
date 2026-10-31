@@ -229,7 +229,7 @@ export default async function AdminPage() {
       {/* Page header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground">لوحة الإدارة</h1>
+          <h1 className="text-xl font-bold text-foreground">Admin</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{todayAr}</p>
         </div>
       </div>
@@ -240,7 +240,7 @@ export default async function AdminPage() {
           icon={<Ticket size={18} />}
           label="تيكتات اليوم"
           value={data.ticketsToday}
-          color="blue"
+          color="primary"
         />
         <KpiCard
           icon={<Clock size={18} />}
@@ -258,7 +258,7 @@ export default async function AdminPage() {
           icon={<Timer size={18} />}
           label="متوسط رد الفروع"
           value={data.avgResponseSec !== null ? formatSecondsAr(data.avgResponseSec) : "—"}
-          color={data.avgResponseSec !== null ? "blue" : "grey"}
+          color={data.avgResponseSec !== null ? "primary" : "grey"}
           isText
         />
       </div>
@@ -355,11 +355,11 @@ function KpiCard({
   icon: React.ReactNode
   label: string
   value: number | string
-  color: "blue" | "amber" | "red" | "grey"
+  color: "primary" | "amber" | "red" | "grey"
   isText?: boolean
 }) {
   const colorMap = {
-    blue:  { icon: "bg-accent text-primary",                            value: "text-primary" },
+    primary: { icon: "bg-accent text-primary",                            value: "text-primary" },
     amber: { icon: "bg-[var(--status-open-bg)] text-[var(--status-open)]",    value: "text-[var(--status-open)]" },
     red:   { icon: "bg-[var(--status-breach-bg)] text-[var(--status-breach)]", value: "text-[var(--status-breach)]" },
     grey:  { icon: "bg-muted text-muted-foreground",                    value: "text-foreground" },
@@ -383,7 +383,7 @@ function KpiCard({
 const UPDATE_ORDER = ["off", "stop", "hours", "open_slot", "force_open", "note"]
 
 /* Chip styling per update type. Red is reserved for the SLA-breach chip,
-   so update chips use slate / blue / green / amber only. */
+   so update chips use slate / rose / sage / gold only. */
 const UPDATE_CHIP: Record<
   string,
   { icon: React.ElementType; bg: string; text: string }

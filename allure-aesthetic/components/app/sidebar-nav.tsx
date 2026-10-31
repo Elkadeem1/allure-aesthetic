@@ -4,55 +4,72 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
-  BookOpen,
   Users,
   Settings,
   LogOut,
   Building2,
   Ticket,
+  Headphones,
+  BookText,
+  GaugeCircle,
 } from "lucide-react"
 import { cn } from "cn"
 import { signOut } from "@/app/login/actions"
+import { BrandLogo } from "./brand-logo"
+import { useDrawers, type DrawerId } from "./drawers"
 import type { AppRole } from "@/lib/types/database.types"
 
 interface NavItem {
-  href: string
   label: string
   icon: React.ElementType
+  href?: string
+  drawer?: DrawerId
   soon?: boolean
 }
 
+const BRANCHES: NavItem = { href: "/dashboard", label: "Branches", icon: Building2 }
+const SKILLS: NavItem = { drawer: "skills", label: "Soft Skills", icon: Headphones }
+const SERVICES: NavItem = { href: "/dashboard/services", label: "Services Guide", icon: BookText }
+
 const AGENT_NAV: NavItem[] = [
-  { href: "/dashboard",         label: "الفروع",   icon: Building2 },
-  { href: "/dashboard/book",    label: "حجز جديد", icon: BookOpen },
-  { href: "/dashboard/tickets", label: "تيكتاتي",  icon: Ticket },
+  BRANCHES,
+  { href: "/dashboard/tickets", label: "My Tickets", icon: Ticket },
+  SKILLS,
+  SERVICES,
+]
+
+const SUPERVISOR_NAV: NavItem[] = [
+  BRANCHES,
+  { href: "/dashboard/tickets", label: "SLA Board", icon: GaugeCircle },
+  SKILLS,
+  SERVICES,
 ]
 
 const ADMIN_NAV: NavItem[] = [
-  { href: "/admin",     label: "إدارة",      icon: LayoutDashboard },
-  { href: "/dashboard", label: "الفروع",     icon: Building2 },
-  { href: "/dashboard/book",    label: "حجز جديد", icon: BookOpen },
-  { href: "/dashboard/tickets", label: "التيكتات", icon: Ticket },
-  { href: "/admin/users",    label: "المستخدمين", icon: Users,    soon: true },
-  { href: "/admin/settings", label: "الإعدادات", icon: Settings, soon: true },
+  { href: "/admin", label: "Admin", icon: LayoutDashboard },
+  BRANCHES,
+  { href: "/dashboard/tickets", label: "Tickets", icon: Ticket },
+  SKILLS,
+  SERVICES,
+  { href: "/admin/users", label: "Users", icon: Users, soon: true },
+  { href: "/admin/settings", label: "Settings", icon: Settings, soon: true },
 ]
 
-const BRANCH_NAV: NavItem[] = [
-  { href: "/branch",   label: "تيكتاتنا", icon: Ticket },
-]
+const BRANCH_NAV: NavItem[] = [{ href: "/branch", label: "Innova Tickets", icon: Ticket }]
 
 function navForRole(role: AppRole): NavItem[] {
   if (role === "admin") return ADMIN_NAV
+  if (role === "supervisor") return SUPERVISOR_NAV
   if (role === "branch") return BRANCH_NAV
   return AGENT_NAV
 }
 
 function roleLabel(role: AppRole): string {
   const labels: Record<AppRole, string> = {
-    admin:      "مدير النظام",
+    admin: "مدير النظام",
     supervisor: "مشرف",
-    agent:      "موظف",
-    branch:     "فرع",
+    agent: "موظف",
+    branch: "فرع",
   }
   return labels[role]
 }
@@ -61,55 +78,77 @@ interface SidebarNavProps {
   role: AppRole
   fullName: string
   subLabel?: string
+  logoSrc?: string | null
+  logoWordmark: string
 }
 
-export function SidebarNav({ role, fullName, subLabel }: SidebarNavProps) {
+export function SidebarNav({ role, fullName, subLabel, logoSrc, logoWordmark }: SidebarNavProps) {
   const pathname = usePathname()
+  const { open, openId } = useDrawers()
   const nav = navForRole(role)
+
+  const itemClass = (active: boolean, soon?: boolean) =>
+    cn(
+      "relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+      active
+        ? "bg-accent text-primary font-semibold"
+        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      soon && "pointer-events-none opacity-40"
+    )
+
+  const ActiveBar = () => (
+    <span aria-hidden className="absolute inset-y-1.5 start-0 w-[3px] rounded-e-full bg-primary" />
+  )
 
   return (
     <aside className="flex flex-col h-full w-56 shrink-0 bg-sidebar border-s border-sidebar-border">
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-sidebar-border">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-primary-foreground font-black text-sm shrink-0 select-none">
-          A
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-bold leading-tight text-foreground">Allure</p>
-          <p className="text-[11px] text-muted-foreground truncate leading-tight">
-            {subLabel ?? "مركز الاتصالات"}
-          </p>
-        </div>
+      {/* Brand */}
+      <div className="flex items-center gap-2.5 px-4 h-16 shrink-0 border-b border-sidebar-border">
+        <BrandLogo
+          src={logoSrc}
+          alt={logoWordmark}
+          wordmark={logoWordmark}
+          imgClassName="h-7 w-auto max-w-[128px] object-contain object-right"
+          wordmarkClassName="text-lg"
+        />
+        {subLabel && (
+          <span className="text-[11px] text-muted-foreground truncate border-s border-border ps-2.5 leading-tight">
+            {subLabel}
+          </span>
+        )}
       </div>
 
       {/* Nav */}
       <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
         {nav.map((item) => {
-          // Exact match for the dashboard root so it doesn't stay lit on /dashboard/book etc.
+          if (item.drawer) {
+            const active = openId === item.drawer
+            return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => open(item.drawer!)}
+                className={cn(itemClass(active), "w-full text-start")}
+              >
+                {active && <ActiveBar />}
+                <item.icon size={16} className="shrink-0" />
+                <span className="flex-1 truncate">{item.label}</span>
+              </button>
+            )
+          }
+          const href = item.href!
           const active =
-            item.href === "/dashboard"
+            href === "/dashboard"
               ? pathname === "/dashboard"
-              : pathname === item.href || pathname.startsWith(item.href + "/")
+              : pathname === href || pathname.startsWith(href + "/")
           return (
             <Link
-              key={item.href}
-              href={item.soon ? "#" : item.href}
+              key={href}
+              href={item.soon ? "#" : href}
               aria-disabled={item.soon}
-              className={cn(
-                "relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                active
-                  ? "bg-accent text-primary font-semibold"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                item.soon && "pointer-events-none opacity-40"
-              )}
+              className={itemClass(active, item.soon)}
             >
-              {active && (
-                /* straight 3px bar on the inline-start (right in RTL) edge */
-                <span
-                  aria-hidden
-                  className="absolute inset-y-1.5 start-0 w-[3px] rounded-e-full bg-primary"
-                />
-              )}
+              {active && <ActiveBar />}
               <item.icon size={16} className="shrink-0" />
               <span className="flex-1 truncate">{item.label}</span>
               {item.soon && (
@@ -122,7 +161,7 @@ export function SidebarNav({ role, fullName, subLabel }: SidebarNavProps) {
         })}
       </nav>
 
-      {/* User card + logout */}
+      {/* User + logout */}
       <div className="p-2 border-t border-sidebar-border space-y-0.5">
         <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg">
           <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold shrink-0 select-none">

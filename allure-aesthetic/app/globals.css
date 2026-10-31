@@ -4,105 +4,140 @@
 @import "shadcn/tailwind.css";
 
 /*
-  Design system — Blue/White professional operations tool
-  Light theme only. No dark mode.
-  8px grid | 12px card radius | Tajawal Arabic
+  Allure design system — warm clinic theme (LIGHT only, no dark mode).
+  Parent brand "Allure" is sage; the Innova branch is rose. The app's primary
+  is rose, with sage + gold as fixed status accents.
+  Tajawal Arabic · RTL · Latin digits · 12–16px radius · soft warm shadows.
+
+  Fixed status meanings (never reuse a colour across states):
+    Confirmed → sage · Open → gold · ticket/request → rose
+    notice/neutral → grey · SLA breach → red (+ pulse)
 */
 
 @theme inline {
   /* Core palette */
-  --color-background:           #F5F7FB;
-  --color-foreground:           #0F172A;
-  --color-card:                 #FFFFFF;
-  --color-card-foreground:      #0F172A;
+  --color-background:           #FBF8F6; /* warm bg */
+  --color-foreground:           #2B2320; /* ink */
+  --color-card:                 #FFFFFF; /* surface */
+  --color-card-foreground:      #2B2320;
   --color-popover:              #FFFFFF;
-  --color-popover-foreground:   #0F172A;
-  --color-muted:                #F1F5F9;
-  --color-muted-foreground:     #64748B;
-  --color-border:               #E4E8F0;
-  --color-input:                #E4E8F0;
-  --color-ring:                 #2563EB;
+  --color-popover-foreground:   #2B2320;
+  --color-muted:                #F3ECE7; /* warm neutral fill */
+  --color-muted-foreground:     #6E6259; /* ink-soft */
+  --color-border:               #E8E0DA; /* line */
+  --color-input:                #E8E0DA;
+  --color-ring:                 #AD5A66; /* rose */
 
-  /* Primary = blue */
-  --color-primary:              #2563EB;
+  /* Primary = rose */
+  --color-primary:              #AD5A66;
   --color-primary-foreground:   #FFFFFF;
 
-  /* Secondary = light surface */
-  --color-secondary:            #F1F5F9;
-  --color-secondary-foreground: #0F172A;
+  /* Secondary = warm surface */
+  --color-secondary:            #F3ECE7;
+  --color-secondary-foreground: #2B2320;
 
-  /* Accent = light blue */
-  --color-accent:               #EFF6FF;
-  --color-accent-foreground:    #2563EB;
+  /* Accent = rose tint */
+  --color-accent:               #F6E9EA;
+  --color-accent-foreground:    #8B4450;
 
   /* Destructive = red */
-  --color-destructive:          #DC2626;
+  --color-destructive:          #C0392B;
   --color-destructive-foreground: #FFFFFF;
 
-  /* Status colors — each maps to exactly one meaning, never reused */
-  --color-status-confirmed:     #16A34A;
-  --color-status-confirmed-bg:  #DCFCE7;
-  --color-status-open:          #D97706;
-  --color-status-open-bg:       #FEF3C7;
-  --color-status-request:       #2563EB;
-  --color-status-request-bg:    #DBEAFE;
-  --color-status-notice:        #6B7280;
-  --color-status-notice-bg:     #F3F4F6;
-  --color-status-breach:        #DC2626;
-  --color-status-breach-bg:     #FEE2E2;
+  /* Brand tokens (direct use) */
+  --color-rose:        #AD5A66;
+  --color-rose-deep:   #8B4450;
+  --color-rose-tint:   #F6E9EA;
+  --color-sage:        #5E7F66;
+  --color-sage-tint:   #E9F1EA;
+  --color-gold:        #B8934F;
+  --color-gold-tint:   #FBF1DE;
+
+  /* Status colours — each maps to exactly one meaning */
+  --color-status-confirmed:     #5E7F66; /* sage */
+  --color-status-confirmed-bg:  #E9F1EA;
+  --color-status-open:          #B8934F; /* gold */
+  --color-status-open-bg:       #FBF1DE;
+  --color-status-request:       #AD5A66; /* rose */
+  --color-status-request-bg:    #F6E9EA;
+  --color-status-notice:        #6E6259; /* grey */
+  --color-status-notice-bg:     #F0EAE5;
+  --color-status-breach:        #C0392B; /* red */
+  --color-status-breach-bg:     #F7E3E0;
 
   /* Sidebar */
   --color-sidebar:              #FFFFFF;
-  --color-sidebar-foreground:   #0F172A;
-  --color-sidebar-border:       #E4E8F0;
+  --color-sidebar-foreground:   #2B2320;
+  --color-sidebar-border:       #E8E0DA;
 
   /* Font */
   --font-sans: "Tajawal", sans-serif;
 
-  /* Radius — 12px base */
+  /* Radius — 12px base, up to 16px */
   --radius:    0.75rem;
   --radius-md: 0.625rem;
   --radius-sm: 0.5rem;
   --radius-lg: 1rem;
+
+  /* Soft, warm shadows (ink-tinted, not grey) */
+  --shadow-sm: 0 1px 2px rgba(43,35,32,.06);
+  --shadow:    0 1px 2px rgba(43,35,32,.06), 0 6px 20px rgba(43,35,32,.05);
+  --shadow-md: 0 2px 4px rgba(43,35,32,.06), 0 8px 24px rgba(43,35,32,.06);
+  --shadow-lg: 0 4px 10px rgba(43,35,32,.07), 0 18px 44px rgba(43,35,32,.08);
+  --shadow-xl: 0 8px 18px rgba(43,35,32,.08), 0 28px 64px rgba(43,35,32,.10);
 }
 
 @layer base {
   :root {
     /* Raw CSS vars for inline var() use */
-    --background:           #F5F7FB;
-    --foreground:           #0F172A;
+    --background:           #FBF8F6;
+    --foreground:           #2B2320;
     --card:                 #FFFFFF;
-    --card-foreground:      #0F172A;
+    --card-foreground:      #2B2320;
     --popover:              #FFFFFF;
-    --popover-foreground:   #0F172A;
-    --primary:              #2563EB;
-    --primary-hover:        #1D4ED8;
+    --popover-foreground:   #2B2320;
+    --primary:              #AD5A66;
+    --primary-hover:        #8B4450;
     --primary-foreground:   #FFFFFF;
-    --primary-light:        #EFF6FF;
-    --secondary:            #F1F5F9;
-    --secondary-foreground: #0F172A;
-    --muted:                #F1F5F9;
-    --muted-foreground:     #64748B;
-    --accent:               #EFF6FF;
-    --accent-foreground:    #2563EB;
-    --destructive:          #DC2626;
+    --primary-light:        #F6E9EA;
+    --secondary:            #F3ECE7;
+    --secondary-foreground: #2B2320;
+    --muted:                #F3ECE7;
+    --muted-foreground:     #6E6259;
+    --accent:               #F6E9EA;
+    --accent-foreground:    #8B4450;
+    --destructive:          #C0392B;
+    --destructive-hover:    #9B2D22;
     --destructive-foreground: #FFFFFF;
-    --border:               #E4E8F0;
-    --input:                #E4E8F0;
-    --ring:                 #2563EB;
+    --border:               #E8E0DA;
+    --input:                #E8E0DA;
+    --ring:                 #AD5A66;
     --radius:               0.75rem;
 
+    /* Brand */
+    --rose:        #AD5A66;
+    --rose-deep:   #8B4450;
+    --rose-tint:   #F6E9EA;
+    --sage:        #5E7F66;
+    --sage-tint:   #E9F1EA;
+    --gold:        #B8934F;
+    --gold-tint:   #FBF1DE;
+    --ink:         #2B2320;
+    --ink-soft:    #6E6259;
+    --line:        #E8E0DA;
+    --shadow:      0 1px 2px rgba(43,35,32,.06), 0 6px 20px rgba(43,35,32,.05);
+
     /* Status */
-    --status-confirmed:     #16A34A;
-    --status-confirmed-bg:  #DCFCE7;
-    --status-open:          #D97706;
-    --status-open-bg:       #FEF3C7;
-    --status-request:       #2563EB;
-    --status-request-bg:    #DBEAFE;
-    --status-notice:        #6B7280;
-    --status-notice-bg:     #F3F4F6;
-    --status-breach:        #DC2626;
-    --status-breach-bg:     #FEE2E2;
+    --status-confirmed:     #5E7F66;
+    --status-confirmed-bg:  #E9F1EA;
+    --status-open:          #B8934F;
+    --status-open-bg:       #FBF1DE;
+    --status-request:       #AD5A66;
+    --status-request-bg:    #F6E9EA;
+    --status-notice:        #6E6259;
+    --status-notice-bg:     #F0EAE5;
+    --status-breach:        #C0392B;
+    --status-breach-bg:     #F7E3E0;
   }
 
   * {
@@ -131,6 +166,24 @@
 
 .animate-sla-pulse {
   animation: sla-pulse 1.4s ease-in-out infinite;
+}
+
+/* Drawer slide-in (honours reduced motion) */
+@keyframes drawer-in-end {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes drawer-in-start {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.animate-drawer-end   { animation: drawer-in-end   .22s cubic-bezier(.22,.61,.36,1); }
+.animate-drawer-start { animation: drawer-in-start .22s cubic-bezier(.22,.61,.36,1); }
+@keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+.animate-overlay { animation: overlay-in .18s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-drawer-end, .animate-drawer-start, .animate-overlay { animation: none; }
 }
 
 /* Tabular numerals for times and counts */
