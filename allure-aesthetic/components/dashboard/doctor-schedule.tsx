@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Clock,
   RefreshCw,
+  Plus,
 } from "lucide-react"
 import { cn } from "cn"
 import { formatDayMonth } from "@/lib/format"
@@ -101,12 +102,16 @@ function DayCard({
   now,
   doctors,
   updates,
+  isAdmin,
+  onAddUpdate,
 }: {
   label: string
   dateStr: string
   now: boolean
   doctors: DoctorData[]
   updates: DoctorUpdate[]
+  isAdmin?: boolean
+  onAddUpdate?: (doctorId: string) => void
 }) {
   const rows = doctors
     .map((d) => ({ d, inf: dayInfo(d, dateStr, updates) }))
@@ -126,6 +131,16 @@ function DayCard({
           rows.map(({ d, inf }) => (
             <div key={d.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
               <b className="text-foreground">{d.displayName}</b>
+              {isAdmin && onAddUpdate && (
+                <button
+                  type="button"
+                  onClick={() => onAddUpdate(d.id)}
+                  title="إضافة Update"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded-md text-primary hover:bg-accent shrink-0"
+                >
+                  <Plus size={13} />
+                </button>
+              )}
               {inf.off ? (
                 <>
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-[var(--status-breach-bg)] text-[var(--status-breach)] font-semibold">
@@ -153,10 +168,14 @@ export function TodayStrip({
   doctors,
   updates,
   todayStr,
+  isAdmin,
+  onAddUpdate,
 }: {
   doctors: DoctorData[]
   updates: DoctorUpdate[]
   todayStr: string
+  isAdmin?: boolean
+  onAddUpdate?: (doctorId: string) => void
 }) {
   const tmr = new Date(todayStr + "T00:00:00")
   tmr.setDate(tmr.getDate() + 1)
@@ -164,8 +183,8 @@ export function TodayStrip({
 
   return (
     <div className="flex flex-col sm:flex-row gap-3">
-      <DayCard label="النهاردة" dateStr={todayStr} now doctors={doctors} updates={updates} />
-      <DayCard label="بكرة" dateStr={tomorrowStr} now={false} doctors={doctors} updates={updates} />
+      <DayCard label="النهاردة" dateStr={todayStr} now doctors={doctors} updates={updates} isAdmin={isAdmin} onAddUpdate={onAddUpdate} />
+      <DayCard label="بكرة" dateStr={tomorrowStr} now={false} doctors={doctors} updates={updates} isAdmin={isAdmin} onAddUpdate={onAddUpdate} />
     </div>
   )
 }

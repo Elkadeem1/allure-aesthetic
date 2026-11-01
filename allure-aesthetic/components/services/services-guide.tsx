@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Search, ChevronDown, MapPin, Tag } from "lucide-react"
 import { cn } from "cn"
 import { gdNorm } from "@/lib/arabic"
+import { KbArticleBody } from "@/components/dashboard/kb-article-body"
 
 export type Svc = {
   id: string
@@ -44,28 +45,6 @@ const SVC_CAT: Record<string, string> = {
   peeling: "PEL",
   derma_other: "OTH",
   dental: "DNT",
-}
-
-/** Render a detail value: bullet list when it's clearly a list, else text. */
-function DetailValue({ value }: { value: string }) {
-  const parts = value.split("، ").map((p) => p.trim()).filter(Boolean)
-  const avg = parts.length ? parts.reduce((a, p) => a + p.length, 0) / parts.length : 0
-  const bullet = parts.length >= 4 || (parts.length === 3 && avg <= 35)
-  if (!bullet) return <p className="text-sm text-foreground leading-relaxed">{value}</p>
-  return (
-    <ul className="space-y-0.5 text-sm text-foreground">
-      {parts.map((p, i) => (
-        <li key={i} className="flex gap-2">
-          <span className="text-primary mt-0.5 shrink-0">•</span>
-          <span>{p}</span>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-function H5({ children }: { children: React.ReactNode }) {
-  return <h5 className="text-xs font-bold text-muted-foreground pt-2">{children}</h5>
 }
 
 export function ServicesGuide({ services }: { services: Svc[] }) {
@@ -135,9 +114,7 @@ function ServiceCard({ sv, open, onToggle }: { sv: Svc; open: boolean; onToggle:
       </button>
 
       {open && (
-        <div className="px-4 pb-4 space-y-2 border-t border-border/60 pt-3">
-          <p className="text-sm text-foreground leading-relaxed">{sv.summary}</p>
-
+        <div className="px-4 pb-4 space-y-4 border-t border-border/60 pt-3">
           {cat && (
             <Link
               href={`/dashboard?cat=${cat}`}
@@ -147,76 +124,7 @@ function ServiceCard({ sv, open, onToggle }: { sv: Svc; open: boolean; onToggle:
             </Link>
           )}
 
-          {sv.details.map(([label, value], i) => (
-            <div key={i}>
-              <H5>{label}</H5>
-              <DetailValue value={value} />
-            </div>
-          ))}
-
-          {sv.products.length > 0 && (
-            <>
-              <H5>المنتجات / الماركات المتاحة</H5>
-              <div className="space-y-1.5">
-                {sv.products.map((p, i) => (
-                  <div key={i} className="text-sm bg-muted/40 rounded-lg px-3 py-2">
-                    <span className="font-semibold text-foreground">{p[0]}</span>
-                    {p[1] && <span className="text-muted-foreground"> — {p[1]}</span>}
-                    {p[2] && <p className="text-xs text-muted-foreground mt-0.5">{p[2]}</p>}
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {sv.booking.length > 0 && (
-            <>
-              <H5>قواعد الحجز (زي مكتب الأسعار)</H5>
-              <ul className="space-y-1 text-sm text-foreground">
-                {sv.booking.map((b, i) => (
-                  <li key={i} className="flex gap-2"><span className="text-primary mt-0.5 shrink-0">•</span><span>{b}</span></li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          {sv.care.length > 0 && (
-            <>
-              <H5>قبل وبعد الجلسة (للريسبشن)</H5>
-              <ul className="space-y-1 text-sm text-foreground">
-                {sv.care.map(([a, b], i) => (
-                  <li key={i} className="flex gap-2"><span className="text-primary mt-0.5 shrink-0">•</span><span><b>{a}:</b> {b}</span></li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          {sv.say.length > 0 && (
-            <>
-              <H5>إزاي ترد</H5>
-              <div className="space-y-2">
-                {sv.say.map(([q, a], i) => (
-                  <div key={i} className="text-sm">
-                    <p className="text-foreground font-medium">«{q}»</p>
-                    <p className="text-muted-foreground">← {a}</p>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          <div className="rounded-xl border border-[var(--rose)]/30 bg-[var(--rose-tint)] p-3 text-sm text-foreground">
-            <b>حوّل للدكتور فورًا لو:</b> {sv.escalate}
-          </div>
-
-          {sv.review.length > 0 && (
-            <>
-              <H5>راجع نفسك</H5>
-              <ol className="list-decimal pe-5 space-y-0.5 text-sm text-foreground marker:text-primary">
-                {sv.review.map((q, i) => <li key={i} className="ps-1">{q}</li>)}
-              </ol>
-            </>
-          )}
+          <KbArticleBody slug={`service:${sv.id}`} body={sv} />
         </div>
       )}
     </div>

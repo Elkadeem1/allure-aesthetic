@@ -3,74 +3,7 @@
 import { X } from "lucide-react"
 import { useEffect } from "react"
 import type { KbArticle } from "./types"
-
-const SECTION_LABELS: Record<string, string> = {
-  explain:      "نظرة عامة",
-  indications:  "الحالات المناسبة",
-  before:       "قبل الجلسة",
-  after:        "بعد الجلسة",
-  contra:       "موانع الاستخدام",
-  neverSay:     "لا تقل للعميل",
-}
-
-function renderBody(body: unknown) {
-  if (!body || typeof body !== "object") {
-    return typeof body === "string" ? (
-      <p className="text-sm text-foreground leading-relaxed">{body}</p>
-    ) : null
-  }
-
-  if (Array.isArray(body)) {
-    return (
-      <ul className="space-y-1">
-        {body.map((item, i) => (
-          <li key={i} className="text-sm text-foreground flex gap-2">
-            <span className="text-primary mt-0.5 shrink-0">•</span>
-            <span>{String(item)}</span>
-          </li>
-        ))}
-      </ul>
-    )
-  }
-
-  const obj = body as Record<string, unknown>
-
-  // Known keys in order
-  const orderedKeys = Object.keys(SECTION_LABELS).filter((k) => k in obj)
-  const otherKeys = Object.keys(obj).filter((k) => !Object.keys(SECTION_LABELS).includes(k))
-  const allKeys = [...orderedKeys, ...otherKeys]
-
-  return (
-    <div className="space-y-4">
-      {allKeys.map((key) => {
-        const val = obj[key]
-        if (!val) return null
-        const label = SECTION_LABELS[key] ?? key
-        return (
-          <div key={key}>
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-              {label}
-            </h4>
-            {typeof val === "string" ? (
-              <p className="text-sm text-foreground leading-relaxed whitespace-pre-line">{val}</p>
-            ) : Array.isArray(val) ? (
-              <ul className="space-y-1">
-                {val.map((item, i) => (
-                  <li key={i} className="text-sm text-foreground flex gap-2">
-                    <span className="text-primary mt-0.5 shrink-0">•</span>
-                    <span>{String(item)}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-foreground">{JSON.stringify(val)}</p>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
+import { KbArticleBody } from "./kb-article-body"
 
 type Props = {
   article: KbArticle
@@ -113,7 +46,7 @@ export function SidePanel({ article, onClose }: Props) {
 
         {/* Panel body */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
-          {renderBody(article.body)}
+          <KbArticleBody slug={article.slug} body={article.body} />
         </div>
       </div>
     </>

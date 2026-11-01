@@ -8,6 +8,7 @@ import { BrandLogo } from "@/components/app/brand-logo"
 import { TodayStrip, BranchSchedule } from "./doctor-schedule"
 import { PriceCatalogue } from "./price-catalogue"
 import { SidePanel } from "./side-panel"
+import { UpdateDialog, type DialogBranch } from "@/components/admin/update-dialog"
 import { upsList, type BannerRow } from "./schedule-utils"
 import { formatEgp, formatNumber } from "@/lib/format"
 import type { BranchData, ConsultRow, DoctorUpdate } from "./types"
@@ -34,12 +35,15 @@ const BANNER_DOT: Record<string, string> = {
 type Props = {
   branches: BranchData[]
   initialCat?: string
+  isAdmin?: boolean
 }
 
-export function BranchTabs({ branches, initialCat }: Props) {
+export function BranchTabs({ branches, initialCat, isAdmin }: Props) {
   const [activeIdx, setActiveIdx] = useState(0)
   const [search, setSearch] = useState("")
   const [sidePanelSlug, setSidePanelSlug] = useState<string | null>(null)
+  const [updateOpen, setUpdateOpen] = useState(false)
+  const [updateDoctorId, setUpdateDoctorId] = useState<string | null>(null)
   const [doctorUpdates, setDoctorUpdates] = useState<DoctorUpdate[]>(
     branches.flatMap((b) => b.doctorUpdates)
   )
@@ -112,6 +116,16 @@ export function BranchTabs({ branches, initialCat }: Props) {
   const closePanel = useCallback(() => setSidePanelSlug(null), [])
   const sidePanelArticle = sidePanelSlug ? allKbArticles.find((a) => a.slug === sidePanelSlug) : null
 
+  const openUpdate = useCallback((doctorId: string) => {
+    setUpdateDoctorId(doctorId)
+    setUpdateOpen(true)
+  }, [])
+  const dialogBranches: DialogBranch[] = branches.map((b) => ({
+    id: b.id,
+    nameAr: b.nameAr,
+    doctors: b.doctors.map((d) => ({ id: d.id, displayName: d.displayName })),
+  }))
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-foreground">Branches</h1>
@@ -144,7 +158,13 @@ export function BranchTabs({ branches, initialCat }: Props) {
       <BranchHeader branch={branch} onChipClick={openPanel} />
 
       {/* Today / tomorrow */}
-      <TodayStrip doctors={branch.doctors} updates={branchUpdates} todayStr={todayStr} />
+      <TodayStrip
+        doctors={branch.doctors}
+        updates={branchUpdates}
+        todayStr={todayStr}
+        isAdmin={isAdmin}
+        onAddUpdate={isAdmin ? openUpdate : undefined}
+      />
 
       {/* Updates — next 7 days */}
       {bannerRows.length > 0 && <UpdatesBanner rows={bannerRows} />}
@@ -169,6 +189,15 @@ export function BranchTabs({ branches, initialCat }: Props) {
       )}
 
       {sidePanelArticle && <SidePanel article={sidePanelArticle} onClose={closePanel} />}
+
+      {isAdmin && (
+        <UpdateDialog
+          branches={dialogBranches}
+          open={updateOpen}
+          onClose={() => setUpdateOpen(false)}
+          prefill={{ branchId: branch.id, doctorId: updateDoctorId }}
+        />
+      )}
     </div>
   )
 }

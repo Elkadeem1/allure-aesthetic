@@ -1,5 +1,6 @@
 import { BranchTabs } from "@/components/dashboard/branch-tabs"
 import { loadBranches } from "@/lib/booking/branches"
+import { createClient } from "@/lib/supabase/server"
 
 export default async function DashboardPage({
   searchParams,
@@ -17,5 +18,16 @@ export default async function DashboardPage({
     )
   }
 
-  return <BranchTabs branches={branches} initialCat={cat} />
+  // Admins get the inline "+ Update" shortcut on each doctor row.
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (user) {
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+    isAdmin = profile?.role === "admin"
+  }
+
+  return <BranchTabs branches={branches} initialCat={cat} isAdmin={isAdmin} />
 }

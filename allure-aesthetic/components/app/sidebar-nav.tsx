@@ -12,6 +12,7 @@ import {
   Headphones,
   BookText,
   GaugeCircle,
+  CalendarClock,
 } from "lucide-react"
 import { cn } from "cn"
 import { signOut } from "@/app/login/actions"
@@ -48,10 +49,11 @@ const SUPERVISOR_NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "Admin", icon: LayoutDashboard },
   BRANCHES,
+  { href: "/admin/updates", label: "Updates", icon: CalendarClock },
   { href: "/dashboard/tickets", label: "Tickets", icon: Ticket },
   SKILLS,
   SERVICES,
-  { href: "/admin/users", label: "Users", icon: Users, soon: true },
+  { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/settings", label: "Settings", icon: Settings, soon: true },
 ]
 
