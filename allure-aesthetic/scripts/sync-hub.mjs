@@ -20,6 +20,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadHubData, slug } from './hub-data.mjs';
+import { warnSourceOfTruth, guardLiveOverwrite } from './guard-live.mjs';
+
+// Read-only dry run, but it drives the HTML sync that would overwrite admin
+// edits. Warn always; refuse an actual --apply without explicit opt-in.
+warnSourceOfTruth('sync-hub is a read-only dry run.');
+if (process.argv.includes('--apply')) {
+  guardLiveOverwrite('--apply would write the HTML catalogue to the live DB.');
+}
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 

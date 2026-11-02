@@ -837,6 +837,7 @@ export type Database = {
           branch_id: string
           code: string
           id: string
+          is_active: boolean
           sort: number
           title: string
         }
@@ -844,6 +845,7 @@ export type Database = {
           branch_id: string
           code: string
           id?: string
+          is_active?: boolean
           sort?: number
           title: string
         }
@@ -851,6 +853,7 @@ export type Database = {
           branch_id?: string
           code?: string
           id?: string
+          is_active?: boolean
           sort?: number
           title?: string
         }
@@ -1165,6 +1168,10 @@ export type Database = {
     Functions: {
       _notify_call_center: {
         Args: { p_body: string; p_kind: string; p_title: string }
+        Returns: undefined
+      }
+      admin_save_doctor_schedule: {
+        Args: { p_doctor_id: string; p_rooms: Json; p_segments: Json }
         Returns: undefined
       }
       _notify_role: {

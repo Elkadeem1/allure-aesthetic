@@ -13,6 +13,7 @@ import {
   BookText,
   GaugeCircle,
   CalendarClock,
+  Stethoscope,
 } from "lucide-react"
 import { cn } from "cn"
 import { signOut } from "@/app/login/actions"
@@ -50,6 +51,8 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "Admin", icon: LayoutDashboard },
   BRANCHES,
   { href: "/admin/updates", label: "Updates", icon: CalendarClock },
+  { href: "/admin/doctors", label: "Doctors", icon: Stethoscope },
+  { href: "/admin/branches", label: "Branch Setup", icon: Building2 },
   { href: "/dashboard/tickets", label: "Tickets", icon: Ticket },
   SKILLS,
   SERVICES,

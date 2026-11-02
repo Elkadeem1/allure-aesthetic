@@ -22,9 +22,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadPriceModel, priceSql } from './import-prices.mjs';
 import { loadHubData, dayIndexer, slug } from './hub-data.mjs';
+import { guardLiveOverwrite, isMain } from './guard-live.mjs';
+
+// The emitted SQL UPSERTs the whole catalogue by code — applying it to the
+// live DB overwrites admin-panel edits. Refuse unless explicitly overridden.
+if (isMain(import.meta.url)) {
+  guardLiveOverwrite('extract-mvp emits idempotent UPSERT SQL for the whole catalogue.');
+}
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const htmlPath = process.argv[2] || path.join(root, 'docs/mvp/agent-hub-2026-10.html');
+const htmlPath = process.argv.slice(2).find((a) => !a.startsWith('--')) || path.join(root, 'docs/mvp/agent-hub-2026-10.html');
 
 // ---------------------------------------------------------------------
 // 1) Load the hub data (shared loader).

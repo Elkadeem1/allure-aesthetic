@@ -65,6 +65,15 @@ app/ (phase 2+)        (admin) (agent) (branch) route groups
 lib/engine/ (phase 3)  booking engine, pure TypeScript + Vitest
 ```
 
+## Source of truth — the DATABASE, not the HTML (post Phase 5)
+Since the admin panel went live, **admins edit doctors, schedules, branches, rooms,
+rules and prices in-app, and the database is the source of truth** — not
+`docs/mvp/agent-hub-2026-10.html`. Re-running the HTML → DB sync would overwrite
+those edits, so the sync scripts are guarded: `scripts/extract-mvp.mjs` (and
+`scripts/sync-hub.mjs --apply`) **refuse to run / write to a live DB unless passed
+`--i-know-this-overwrites-admin-edits`** (see `scripts/guard-live.mjs`). The HTML
+is now only for seeding a brand-new database.
+
 ## Database rules — read before touching data code
 - **Weekday numbering: Saturday = 0 … Friday = 6** (same as the MVP). Use `weekday_sat0()` in SQL.
 - **"Today" is always Africa/Cairo** (`cairo_today()` in SQL, date-fns-tz in TS). Never use the server's local date.
@@ -94,7 +103,9 @@ Keep it pure (data in, result out), read rules from the DB tables, and cover eve
 
 ## Commands
 ```bash
-node scripts/extract-mvp.mjs > supabase/seed.sql     # regenerate seed (extractor + price importer)
+# Seeds a NEW DB only. The DB is now the source of truth; this OVERWRITES admin edits,
+# so it refuses to run without the override flag (see scripts/guard-live.mjs).
+node scripts/extract-mvp.mjs --i-know-this-overwrites-admin-edits > supabase/seed.sql
 node scripts/import-prices.mjs                        # prices only, idempotent upsert SQL (admin "upload price list")
 node scripts/gen-sync-report.mjs /tmp/seed-old.sql    # dry-run diff vs current DB -> docs/sync-report.md
 PGURL=postgres://postgres:postgres@localhost:5432/postgres scripts/test-db.sh   # local SQL tests (needs psql)
