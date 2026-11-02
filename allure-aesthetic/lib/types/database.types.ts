@@ -708,6 +708,30 @@ export type Database = {
           },
         ]
       }
+      price_imports: {
+        Row: {
+          counts: Json
+          created_at: string
+          file_name: string | null
+          id: string
+          imported_by: string | null
+        }
+        Insert: {
+          counts?: Json
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          imported_by?: string | null
+        }
+        Update: {
+          counts?: Json
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          imported_by?: string | null
+        }
+        Relationships: []
+      }
       price_item_doctors: {
         Row: {
           doctor_id: string
@@ -1168,6 +1192,16 @@ export type Database = {
     Functions: {
       _notify_call_center: {
         Args: { p_body: string; p_kind: string; p_title: string }
+        Returns: undefined
+      }
+      admin_apply_price_import: {
+        Args: {
+          p_branch_prices: Json
+          p_categories: Json
+          p_counts: Json
+          p_file_name: string
+          p_items: Json
+        }
         Returns: undefined
       }
       admin_save_doctor_schedule: {

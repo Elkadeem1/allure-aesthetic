@@ -26,27 +26,12 @@ import vm from 'node:vm';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ExcelJS from 'exceljs';
+// Shared Excel parsing + constants (same code the admin upload page uses).
+import { priceNum, parseWorkbook } from '../lib/admin/prices/excel.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const XLSX_PATH = path.join(root, 'docs/data/price-list.xlsx');
 const HTML_PATH = path.join(root, 'docs/mvp/agent-hub-2026-10.html');
-
-// Excel branch column header -> our branch code.
-const BRANCH_BY_HEADER = {
-  'التجمع الخامس': 'newcairo',
-  'طنطا شارع السعيد': 'tanta2',
-  'طنطا شارع الاستاد': 'tanta1',
-  'المنصورة': 'mansoura',
-  'كفر الشيخ': 'kafrelsheikh',
-  'شبين الكوم': 'shebin',
-};
-
-// Category code -> knowledge-base slug (DEFS keys) + "يبدأ من" overrides.
-const CATEGORY_KB = {
-  FIL: 'def:filler', BTX: 'def:botox', LSR: 'def:laser', MES: 'def:meso',
-  PEL: 'def:peeling', SKB: 'def:skinbooster', PLA: 'def:pllaexo', EXO: 'def:pllaexo',
-};
-const CATEGORY_STARTS_FROM = { DPN: 750 };
 
 // laser_area code -> { single, pkg } Excel item codes. Women and men are
 // separate items; men have no 3-session package. Multi-area keys are bundles.
@@ -89,28 +74,6 @@ const ITEM_DOCTORS = {
 };
 
 // ---------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------
-const cellText = (c) => {
-  const v = c?.value;
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'object') {
-    if ('text' in v) return v.text;
-    if ('result' in v) return v.result;
-    if ('richText' in v) return v.richText.map((r) => r.text).join('');
-    if ('hyperlink' in v) return v.text || v.hyperlink;
-    return '';
-  }
-  return v;
-};
-const str = (v) => String(v ?? '').trim();
-const priceNum = (v) => {
-  if (v === '' || v === null || v === undefined) return null;
-  const n = parseFloat(String(v).replace(/[^\d.]/g, ''));
-  return Number.isFinite(n) ? n : null;
-};
-
-// ---------------------------------------------------------------------
 // Read the Innova prices + consultations from the HTML (script globals).
 // ---------------------------------------------------------------------
 function readInnovaFromHtml(htmlPath) {
@@ -150,89 +113,13 @@ export async function loadPriceModel({ xlsxPath = XLSX_PATH, htmlPath = HTML_PAT
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(xlsxPath);
 
-  const categories = [];   // {code, name_ar, name_en, sort, kb_slug, starts_from}
-  const items = [];        // {code, category_code, group_name, variant, unit, full_name, item_type, availability_text, notes, price_text, sort}
-  const branchPrices = []; // {code, branch, price}
+  // Excel part (categories, items, branch prices) via the shared parser.
+  const parsed = parseWorkbook(wb);
+  const categories = parsed.categories;
+  const items = parsed.items;        // Excel items; Innova (INV-xxx) appended below
+  const branchPrices = parsed.branchPrices;
   const unmapped = { itemsWithoutLaserOrService: [], notes: [] };
-
-  // --- categories (sheet الأقسام) ---
-  const catSheet = wb.getWorksheet('الأقسام');
-  let csort = 0;
-  catSheet.eachRow((row, rn) => {
-    if (rn === 1) return;
-    const code = str(cellText(row.getCell(1)));
-    if (!code) return;
-    categories.push({
-      code,
-      name_ar: str(cellText(row.getCell(2))),
-      name_en: str(cellText(row.getCell(3))) || null,
-      sort: csort++,
-      kb_slug: CATEGORY_KB[code] || null,
-      starts_from: CATEGORY_STARTS_FROM[code] ?? null,
-    });
-  });
-
-  // --- descriptive columns (sheet قائمة الأسعار), keyed by item code ---
-  const descSheet = wb.getWorksheet('قائمة الأسعار');
-  const desc = new Map();
-  let isort = 0;
-  descSheet.eachRow((row, rn) => {
-    if (rn === 1) return;
-    const code = str(cellText(row.getCell(1)));
-    if (!code) return;
-    const typeAr = str(cellText(row.getCell(8))); // نوع البند: خدمة / إضافة
-    desc.set(code, {
-      code,
-      category_ar: str(cellText(row.getCell(2))),
-      group_name: str(cellText(row.getCell(4))) || null,
-      variant: str(cellText(row.getCell(5))) || null,
-      unit: str(cellText(row.getCell(6))) || null,
-      full_name: str(cellText(row.getCell(7))),
-      item_type: typeAr === 'إضافة' ? 'addon' : 'service',
-      availability_text: str(cellText(row.getCell(11))) || null,
-      notes: str(cellText(row.getCell(12))) || null,
-      sort: isort++,
-    });
-  });
-
-  // category code by Arabic name (to attach Excel items to a category code).
-  const catCodeByAr = new Map(categories.map((c) => [c.name_ar, c.code]));
-
-  // --- per-branch prices (sheet الأسعار حسب الفرع) ---
-  const priceSheet = wb.getWorksheet('الأسعار حسب الفرع');
-  const header = priceSheet.getRow(1);
-  const branchCol = {}; // col index -> branch code
-  header.eachCell((cell, col) => {
-    const code = BRANCH_BY_HEADER[str(cellText(cell))];
-    if (code) branchCol[col] = code;
-  });
-
-  priceSheet.eachRow((row, rn) => {
-    if (rn === 1) return;
-    const code = str(cellText(row.getCell(1)));
-    if (!code) return;
-    const d = desc.get(code);
-    if (!d) { unmapped.notes.push(`price row ${code} has no descriptive row in "قائمة الأسعار"`); return; }
-    const catCode = catCodeByAr.get(d.category_ar);
-    if (!catCode) unmapped.notes.push(`item ${code}: category "${d.category_ar}" not in "الأقسام"`);
-    items.push({
-      code,
-      category_code: catCode || null,
-      group_name: d.group_name,
-      variant: d.variant,
-      unit: d.unit,
-      full_name: d.full_name,
-      item_type: d.item_type,
-      availability_text: d.availability_text,
-      notes: d.notes,
-      price_text: null,
-      sort: d.sort,
-    });
-    for (const [col, branch] of Object.entries(branchCol)) {
-      const p = priceNum(cellText(row.getCell(Number(col))));
-      if (p !== null) branchPrices.push({ code, branch, price: p });
-    }
-  });
+  for (const e of parsed.errors) unmapped.notes.push(`${e.sheet} row ${e.row}: ${e.message}`);
 
   // --- Innova prices from the HTML (INV-xxx) ---
   const { innovaCats, innovaCons } = readInnovaFromHtml(htmlPath);
